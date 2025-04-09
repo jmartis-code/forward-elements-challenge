@@ -1,0 +1,14 @@
+{
+  "name": "@fwd/eslint",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    "./base": "./src/base.mjs",
+    "./next": "./src/next.mjs",
+    "./react": "./src/react.mjs"
+  },
+  "dependencies": {}
+}

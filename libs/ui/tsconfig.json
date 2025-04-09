@@ -1,0 +1,13 @@
+{
+  "files": [],
+  "include": [],
+  "references": [
+    {
+      "path": "./tsconfig.lib.json"
+    },
+    {
+      "path": "../eslint"
+    }
+  ],
+  "extends": "../../tsconfig.base.json"
+}

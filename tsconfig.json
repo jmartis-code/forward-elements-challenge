@@ -1,0 +1,28 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compileOnSave": false,
+  "files": [],
+  "references": [
+    {
+      "path": "./libs/elements-react"
+    },
+    {
+      "path": "./libs/elements-js"
+    },
+    {
+      "path": "./apps/storefront"
+    },
+    {
+      "path": "./apps/elements"
+    },
+    {
+      "path": "./libs/ui"
+    },
+    {
+      "path": "./libs/elements-types"
+    },
+    {
+      "path": "./libs/eslint"
+    }
+  ]
+}

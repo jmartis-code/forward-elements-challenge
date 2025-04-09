@@ -1,0 +1,11 @@
+{
+  "name": "@fwd/storefront",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "nx": {
+    "name": "storefront",
+    "projectType": "application",
+    "sourceRoot": "apps/storefront"
+  }
+}

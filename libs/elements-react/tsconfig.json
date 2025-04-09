@@ -1,0 +1,22 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "files": [],
+  "include": [],
+  "references": [
+    {
+      "path": "../ui"
+    },
+    {
+      "path": "../elements-js"
+    },
+    {
+      "path": "../elements-types"
+    },
+    {
+      "path": "../eslint"
+    },
+    {
+      "path": "./tsconfig.lib.json"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "name": "@fwd/elements",
+  "version": "0.0.1",
+  "private": true,
+  "nx": {
+    "name": "elements",
+    "projectType": "application",
+    "sourceRoot": "apps/elements"
+  }
+}
