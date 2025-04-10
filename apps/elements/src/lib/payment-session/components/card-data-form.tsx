@@ -721,12 +721,6 @@ function CardFormContent({
           </div>
         )}
 
-        {showSuccessMessage && (
-          <div className="bg-green-50 border border-green-200 text-green-700 p-3 rounded-md mb-4 text-xs">
-            <p>Payment details submitted successfully!</p>
-          </div>
-        )}
-
         <h2 className="text-lg font-medium mb-4">Payment Information</h2>
 
         <Form {...form}>

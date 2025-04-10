@@ -6,8 +6,13 @@ import { useCheckoutForm } from "./checkout-form";
 import { useState } from "react";
 
 export function CheckoutButton() {
-  const { validateBothForms, isReady, isSubmitting, paymentSuccess } =
-    useCheckoutForm();
+  const {
+    validateBothForms,
+    isReady,
+    isSubmitting,
+    isProcessingPayment,
+    paymentSuccess,
+  } = useCheckoutForm();
   const [isValidating, setIsValidating] = useState(false);
 
   const handleSubmit = async () => {
@@ -19,7 +24,7 @@ export function CheckoutButton() {
     }
   };
 
-  const isProcessing = isValidating || isSubmitting;
+  const isProcessing = isValidating || isSubmitting || isProcessingPayment;
 
   // If payment is successful, don't show button at all
   if (paymentSuccess) {
@@ -31,12 +36,16 @@ export function CheckoutButton() {
       <Button
         onClick={handleSubmit}
         disabled={!isReady || isProcessing}
-        className="py-6 text-md font-medium"
+        className={`py-6 text-md font-medium relative transition-all duration-300 ${
+          isProcessing ? "pl-10 bg-indigo-600" : ""
+        }`}
       >
         {isProcessing ? (
           <>
-            <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-            {isValidating ? "Validating..." : "Processing Payment..."}
+            <Loader2 className="w-5 h-5 mr-2 animate-spin absolute left-4" />
+            <span className="flex items-center">
+              {isProcessingPayment ? "Processing Payment..." : "Processing..."}
+            </span>
           </>
         ) : (
           "Submit Order"

@@ -63,6 +63,7 @@ type CheckoutFormContextType = {
   validateBothForms: () => Promise<void>;
   isReady: boolean;
   isSubmitting: boolean;
+  isProcessingPayment: boolean;
   events: CardFormEvent[];
   paymentSuccess: boolean;
   paymentError: string | null;
@@ -93,6 +94,7 @@ export const CheckoutFormProvider = ({
   const [events, setEvents] = useState<CardFormEvent[]>([]);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
   // State to store payment result data
   const [paymentResult, setPaymentResult] = useState<{
@@ -135,7 +137,7 @@ export const CheckoutFormProvider = ({
     });
 
     // Add a listener for PAYMENT_COMPLETE messages
-    const handlePaymentComplete = (event: MessageEvent) => {
+    const handlePaymentComplete = async (event: MessageEvent) => {
       // Check source and message type
       if (event.data?.type === "PAYMENT_COMPLETE") {
         console.log("Received PAYMENT_COMPLETE message", event.data);
@@ -143,11 +145,17 @@ export const CheckoutFormProvider = ({
         // Get the payment data
         const paymentData = event.data.data?.payment;
         if (paymentData) {
+          // Payment is complete, make sure processing state is cleared
+          setIsProcessingPayment(false);
+
           // Clear cart from localStorage
           localStorage.removeItem("cart");
 
           // Dispatch cart cleared event
           window.dispatchEvent(new CustomEvent("cart:cleared"));
+
+          // Add a 2-second delay before showing success
+          await new Promise((resolve) => setTimeout(resolve, 2000));
 
           setPaymentSuccess(true);
           setPaymentError(null);
@@ -172,6 +180,12 @@ export const CheckoutFormProvider = ({
   const processPayment = async (methodId: string) => {
     try {
       const formData = form.getValues();
+
+      // Set processing payment state to true
+      setIsProcessingPayment(true);
+
+      // Add a 2-second delay to ensure spinner is visible before starting the API call
+      await new Promise((resolve) => setTimeout(resolve, 2000));
 
       // Create payment through the API
       const response = await client.createPayment({
@@ -230,6 +244,9 @@ export const CheckoutFormProvider = ({
         description:
           error instanceof Error ? error.message : "Payment processing failed",
       });
+    } finally {
+      // Always set processing payment state back to false when done
+      setIsProcessingPayment(false);
     }
   };
 
@@ -583,6 +600,7 @@ export const CheckoutFormProvider = ({
       validateBothForms,
       isReady,
       isSubmitting,
+      isProcessingPayment,
       events,
       paymentSuccess,
       paymentError,
@@ -594,6 +612,7 @@ export const CheckoutFormProvider = ({
       validateBothForms,
       isReady,
       isSubmitting,
+      isProcessingPayment,
       events,
       paymentSuccess,
       paymentError,
@@ -603,7 +622,7 @@ export const CheckoutFormProvider = ({
 
   // Add handler to store payment result data when PAYMENT_COMPLETE is received
   useEffect(() => {
-    const handlePaymentResult = (event: MessageEvent) => {
+    const handlePaymentResult = async (event: MessageEvent) => {
       console.log("Received message in checkout form:", event.data?.type);
 
       // Handle both PAYMENT_COMPLETE and EvtSuccess events
@@ -616,6 +635,9 @@ export const CheckoutFormProvider = ({
           "Processing payment message with data:",
           event.data.data.payment
         );
+
+        // Add a 2-second delay before processing payment result
+        await new Promise((resolve) => setTimeout(resolve, 2000));
 
         // Set payment result
         setPaymentResult(event.data.data.payment);
@@ -703,6 +725,7 @@ export function CheckoutForm() {
     validateBothForms,
     isReady,
     isSubmitting,
+    isProcessingPayment,
     events,
     paymentSuccess,
     paymentError,
@@ -723,7 +746,7 @@ export function CheckoutForm() {
 
   // Add handler to store payment result data when PAYMENT_COMPLETE is received
   useEffect(() => {
-    const handlePaymentResult = (event: MessageEvent) => {
+    const handlePaymentResult = async (event: MessageEvent) => {
       console.log("Received message in checkout form:", event.data?.type);
 
       // Handle both PAYMENT_COMPLETE and EvtSuccess events
@@ -736,6 +759,9 @@ export function CheckoutForm() {
           "Processing payment message with data:",
           event.data.data.payment
         );
+
+        // Add a 2-second delay before processing payment result
+        await new Promise((resolve) => setTimeout(resolve, 2000));
 
         // Set payment result
         setLocalPaymentResult(event.data.data.payment);
