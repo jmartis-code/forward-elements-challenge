@@ -87,29 +87,60 @@ export const useCardForm = () => {
 
 export const CardInput = ({ className }: { className?: string }) => {
   const ref = React.useRef<HTMLDivElement>(null);
+  const [isMounted, setIsMounted] = React.useState(false);
   const { form, isReady } = useCardForm();
 
+  // Ensure the form is mounted whenever the ref or form changes
   React.useEffect(() => {
-    if (ref.current) {
+    if (!ref.current) {
+      console.log("Ref not available yet, waiting...");
+      return;
+    }
+
+    console.log("Mounting card form to DOM element");
+    try {
       form.mount(ref.current);
+      setIsMounted(true);
+      console.log("Card form mounted successfully");
+    } catch (error) {
+      console.error("Error mounting card form:", error);
+      setIsMounted(false);
     }
 
     return () => {
-      form.unmount();
+      console.log("Unmounting card form");
+      try {
+        form.unmount();
+        setIsMounted(false);
+        console.log("Card form unmounted successfully");
+      } catch (error) {
+        console.error("Error unmounting card form:", error);
+      }
     };
-  }, [ref]);
+  }, [ref, form]);
 
+  // Handle ready state
   React.useEffect(() => {
-    if (isReady) {
-      form.hello("Hello from parent window");
+    if (isReady && isMounted) {
+      console.log("Card form is ready, sending hello message");
+      try {
+        form.hello("Hello from parent window");
+      } catch (error) {
+        console.error("Error sending hello message:", error);
+      }
     }
-  }, [isReady]);
+  }, [isReady, form, isMounted]);
 
   return (
     <div
       ref={ref}
       className={cn("elements-card-input", className)}
-      style={{ minHeight: "370px", height: "370px" }}
+      style={{
+        minHeight: "500px",
+        height: "500px",
+        border: "1px solid #e2e8f0",
+        borderRadius: "0.375rem",
+      }}
     />
   );
 };

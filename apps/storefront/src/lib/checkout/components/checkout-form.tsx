@@ -1,6 +1,6 @@
 "use client";
 
-import { type CardFormEvent } from "@fwd/elements-types";
+import { type CardFormEvent, EvtSuccess, EvtError } from "@fwd/elements-types";
 import { CardInput, useCardForm } from "@fwd/elements-react";
 import type { CreatePaymentSessionResponse } from "@fwd/elements-types";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -19,6 +19,9 @@ import {
   type UseFormReturn,
 } from "react-hook-form";
 import { z } from "zod";
+import { EvtValidationResult } from "@fwd/elements-types";
+import { client } from "@/lib/query-client";
+import { toast } from "sonner";
 
 import {
   Form,
@@ -61,6 +64,8 @@ type CheckoutFormContextType = {
   isReady: boolean;
   isSubmitting: boolean;
   events: CardFormEvent[];
+  paymentSuccess: boolean;
+  paymentError: string | null;
 };
 
 export const CheckoutFormContext =
@@ -77,28 +82,10 @@ export const CheckoutFormProvider = ({
 }: CheckoutFormProviderProps) => {
   const { form: cardForm, isReady, isSubmitting } = useCardForm();
   const [events, setEvents] = useState<CardFormEvent[]>([]);
+  const [paymentSuccess, setPaymentSuccess] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const unsubscribe = cardForm.subscribe((event) => {
-      setEvents((prev) => [...prev, event]);
-
-      // Handle success events from the card form
-      if (event.type === "CARD_FORM_SUCCESS") {
-        // TODO: This is where you would create a payment with the payment method ID
-        console.log("Payment method created successfully", event.data.methodId);
-
-        // Here you would typically:
-        // 1. Send the payment method ID to your server
-        // 2. Create a payment using the payment method ID
-        // 3. Redirect the user to a confirmation page
-      }
-    });
-
-    return () => {
-      unsubscribe();
-    };
-  }, [cardForm]);
-
+  // Initialize form before we try to use it in processPayment
   const form = useForm<CheckoutFormSchema>({
     resolver: zodResolver(CheckoutFormSchema),
     defaultValues: {
@@ -115,6 +102,80 @@ export const CheckoutFormProvider = ({
       },
     },
   });
+
+  useEffect(() => {
+    const unsubscribe = cardForm.subscribe((event) => {
+      setEvents((prev) => [...prev, event]);
+
+      // Handle success events from the card form
+      if (event.type === "CARD_FORM_SUCCESS") {
+        console.log("Payment method created successfully", event.data.methodId);
+        processPayment(event.data.methodId);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [cardForm, form]);
+
+  // Function to process payment with the payment method ID
+  const processPayment = async (methodId: string) => {
+    try {
+      const formData = form.getValues();
+
+      // Create payment through the API
+      const response = await client.createPayment({
+        body: {
+          session_id: session.id,
+          method_id: methodId,
+          amount: session.amount,
+          payor: {
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            email: formData.email,
+            phone: formData.phone,
+            address: {
+              line1: formData.address.line1,
+              line2: formData.address.line2,
+              city: formData.address.city,
+              state: formData.address.state,
+              postalCode: formData.address.postalCode,
+              country: "US", // Default to US
+            },
+          },
+          reference_id: session.reference_id,
+        },
+        headers: {
+          authorization: "Bearer test123",
+        },
+      });
+
+      if (response.status === 201) {
+        console.log("Payment processed successfully:", response.body);
+        setPaymentSuccess(true);
+        setPaymentError(null);
+        toast.success("Payment Successful", {
+          description: `Payment of $${(session.amount / 100).toFixed(
+            2
+          )} has been processed.`,
+        });
+        // Redirect or show success page
+      } else {
+        throw new Error(`Payment processing failed: ${response.status}`);
+      }
+    } catch (error) {
+      console.error("Error processing payment:", error);
+      setPaymentSuccess(false);
+      setPaymentError(
+        error instanceof Error ? error.message : "Payment processing failed"
+      );
+      toast.error("Payment Failed", {
+        description:
+          error instanceof Error ? error.message : "Payment processing failed",
+      });
+    }
+  };
 
   // Add real-time validation to clear errors when fields are valid
   useEffect(() => {
@@ -146,16 +207,19 @@ export const CheckoutFormProvider = ({
         return;
       }
 
+      // At this point, TypeScript should know contentWindow is not null
+      const contentWindow = iframeElement.contentWindow;
+
       try {
         // Use postMessage to communicate with the iframe instead of direct property access
         // Create a listener for the validation result
         const validationPromise = new Promise<boolean>((resolve, reject) => {
           const handleMessage = (event: MessageEvent) => {
             // Make sure the message is from our iframe
-            if (event.source !== iframeElement.contentWindow) return;
+            if (event.source !== contentWindow) return;
 
             // Handle validation result
-            if (event.data?.type === "VALIDATION_RESULT") {
+            if (event.data?.type === EvtValidationResult) {
               // Remove the event listener to avoid memory leaks
               window.removeEventListener("message", handleMessage);
 
@@ -176,16 +240,27 @@ export const CheckoutFormProvider = ({
             window.removeEventListener("message", handleMessage);
             reject(new Error("Validation timed out"));
           }, 5000);
-        });
 
-        // Send the validation request message to the iframe
-        iframeElement.contentWindow.postMessage(
-          {
+          // Send the validation request message to the iframe
+          console.log("Sending validation request to iframe:", {
             type: "VALIDATE_FORM",
             url: session.url,
-          },
-          "*"
-        );
+          });
+
+          try {
+            contentWindow.postMessage(
+              {
+                type: "VALIDATE_FORM",
+                url: session.url,
+              },
+              "*"
+            );
+            console.log("Validation request sent successfully");
+          } catch (error) {
+            console.error("Error sending validation request:", error);
+            reject(new Error("Failed to send validation request"));
+          }
+        });
 
         // Wait for the validation result
         const isValid = await validationPromise;
@@ -193,14 +268,28 @@ export const CheckoutFormProvider = ({
           return;
         }
 
-        // Success will be captured by the cardForm.subscribe handler
+        // If validation is successful, submit the form to the iframe for tokenization
+        console.log("Validation successful, submitting form for tokenization");
+
+        // Trigger the card form submission which will tokenize the card data
+        contentWindow.postMessage(
+          {
+            type: "submit-form",
+            url: session.url,
+          },
+          "*"
+        );
+
+        // The result will be handled by the cardForm.subscribe handler in the useEffect
       } catch (error) {
         console.error("Error validating card form:", error);
+        toast.error("Validation Failed", {
+          description:
+            error instanceof Error ? error.message : "Card validation failed",
+        });
       }
-
-      // TODO: Fetch the payment method id from the card form and create a payment
     },
-    [cardForm, session]
+    [cardForm, session, form]
   );
 
   // Function to validate both checkout form and card form
@@ -212,9 +301,21 @@ export const CheckoutFormProvider = ({
       return;
     }
 
+    // At this point, TypeScript should know contentWindow is not null
+    const contentWindow = iframeElement.contentWindow;
+
     let checkoutFormValid = false;
     let cardFormValid = false;
     let checkoutFormErrors: string[] = [];
+    let cardFormErrors: string[] = [];
+    let validationResult:
+      | {
+          isValid: boolean;
+          errors: string[];
+          firstErrorField?: string;
+          errorMessages?: Record<string, string>;
+        }
+      | undefined;
 
     // Validate checkout form
     try {
@@ -230,24 +331,25 @@ export const CheckoutFormProvider = ({
     }
 
     // Validate card form
-    let cardFormErrors: string[] = [];
     try {
       // Create a listener for the validation result
       const validationPromise = new Promise<{
         isValid: boolean;
         errors: string[];
         firstErrorField?: string;
+        errorMessages?: Record<string, string>;
       }>((resolve, reject) => {
         const handleMessage = (event: MessageEvent) => {
           // Make sure the message is from our iframe
-          if (event.source !== iframeElement.contentWindow) return;
+          if (event.source !== contentWindow) return;
 
           console.log("Message received from iframe:", event.data);
 
-          // Check for validation results in the hello event
+          // Check for validation results - be more flexible with the event type
           if (
-            event.data?.type === "CARD_FORM_HELLO" &&
-            event.data?.data?.message === "validation_result"
+            event.data &&
+            (event.data.type === EvtValidationResult ||
+              event.data.type === "VALIDATION_RESULT")
           ) {
             console.log("Validation result received:", event.data.data);
             // Remove the event listener to avoid memory leaks
@@ -265,11 +367,18 @@ export const CheckoutFormProvider = ({
               // Get the first error field from the response
               const firstErrorField = event.data.data.firstErrorField;
               const errorFields = Object.keys(event.data.data.errors || {});
+              const errorMessages = Object.entries(
+                event.data.data.errors || {}
+              ).reduce((acc, [field, error]: [string, any]) => {
+                acc[field] = error.message;
+                return acc;
+              }, {} as Record<string, string>);
 
               resolve({
                 isValid: false,
                 errors: errorFields,
                 firstErrorField,
+                errorMessages,
               });
             }
           }
@@ -286,32 +395,63 @@ export const CheckoutFormProvider = ({
           window.removeEventListener("message", handleMessage);
           reject(new Error("Validation timed out"));
         }, 15000);
-      });
 
-      // Send the validation request message to the iframe
-      console.log("Sending validation request to iframe:", {
-        type: "VALIDATE_FORM",
-        url: session.url,
-      });
-
-      iframeElement.contentWindow.postMessage(
-        {
+        // Send the validation request message to the iframe
+        console.log("Sending validation request to iframe:", {
           type: "VALIDATE_FORM",
           url: session.url,
-        },
-        "*"
-      );
+        });
+
+        try {
+          contentWindow.postMessage(
+            {
+              type: "VALIDATE_FORM",
+              url: session.url,
+            },
+            "*"
+          );
+          console.log("Validation request sent successfully");
+        } catch (error) {
+          console.error("Error sending validation request:", error);
+          reject(new Error("Failed to send validation request"));
+        }
+      });
 
       // Wait for the validation result
-      const result = await validationPromise;
-      cardFormValid = result.isValid;
-      cardFormErrors = result.errors;
+      validationResult = await validationPromise;
+      cardFormValid = validationResult.isValid;
+      cardFormErrors = validationResult.errors;
 
       if (!cardFormValid) {
-        console.error("Card form validation failed");
+        // First focus on the iframe
+        if (iframeElement) {
+          setTimeout(() => {
+            iframeElement.focus();
+          }, 50);
+        }
+
+        // Then send a message to focus on the first error field with more detailed information
+        const firstCardErrorField =
+          validationResult.firstErrorField || cardFormErrors[0];
+        const errorMessage = firstCardErrorField
+          ? validationResult.errorMessages?.[firstCardErrorField]
+          : undefined;
+
+        if (firstCardErrorField) {
+          contentWindow.postMessage(
+            {
+              type: "FOCUS_FIELD",
+              field: firstCardErrorField,
+              message: errorMessage,
+              url: session.url,
+            },
+            "*"
+          );
+        }
       }
     } catch (error) {
-      console.error("Error validating card form:", error);
+      console.error("Failed to validate card form:", error);
+      cardFormValid = false;
     }
 
     // Focus logic - only focus the first error across both forms
@@ -333,19 +473,40 @@ export const CheckoutFormProvider = ({
         // Focus the iframe first
         iframeElement.focus();
 
-        // Then send a message to focus on the first error field
+        // Then send a message to focus on the first error field with more detailed information
         const firstCardErrorField = cardFormErrors[0];
-        if (firstCardErrorField) {
-          setTimeout(() => {
-            iframeElement.contentWindow?.postMessage(
-              {
-                type: "FOCUS_FIELD",
-                url: session.url,
-                data: { fieldName: firstCardErrorField },
-              },
-              "*"
-            );
-          }, 100);
+
+        try {
+          // Only attempt to access validationResult properties if it exists
+          if (validationResult && firstCardErrorField) {
+            const errorMessage =
+              validationResult.errorMessages?.[firstCardErrorField] || "";
+
+            setTimeout(() => {
+              iframeElement.contentWindow?.postMessage(
+                {
+                  type: "FOCUS_FIELD",
+                  field: firstCardErrorField,
+                  message: errorMessage,
+                  url: session.url,
+                },
+                "*"
+              );
+            }, 50);
+          } else if (firstCardErrorField) {
+            // Fallback if validationResult is undefined
+            setTimeout(() => {
+              iframeElement.contentWindow?.postMessage(
+                {
+                  type: "FOCUS_FIELD",
+                  field: firstCardErrorField,
+                },
+                "*"
+              );
+            }, 50);
+          }
+        } catch (error) {
+          console.error("Error processing validation result:", error);
         }
       }
     }
@@ -360,8 +521,26 @@ export const CheckoutFormProvider = ({
   const submit = form.handleSubmit(onSubmitSuccess);
 
   const context = useMemo(
-    () => ({ form, submit, validateBothForms, isReady, isSubmitting, events }),
-    [form, submit, validateBothForms, isReady, isSubmitting, events]
+    () => ({
+      form,
+      submit,
+      validateBothForms,
+      isReady,
+      isSubmitting,
+      events,
+      paymentSuccess,
+      paymentError,
+    }),
+    [
+      form,
+      submit,
+      validateBothForms,
+      isReady,
+      isSubmitting,
+      events,
+      paymentSuccess,
+      paymentError,
+    ]
   );
 
   return (

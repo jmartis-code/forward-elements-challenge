@@ -7,6 +7,7 @@ import {
   EvtReady,
   EvtSubmit,
   EvtSuccess,
+  EvtValidationResult,
 } from "@fwd/elements-types";
 import { useEffect, useRef, useState } from "react";
 
@@ -18,7 +19,14 @@ function isCardFormEvent(event: unknown): event is CardFormEvent {
   return (
     "type" in event &&
     typeof event.type === "string" &&
-    [EvtSuccess, EvtError, EvtSubmit, EvtReady, EvtHello].includes(event.type)
+    [
+      EvtSuccess,
+      EvtError,
+      EvtSubmit,
+      EvtReady,
+      EvtHello,
+      EvtValidationResult,
+    ].includes(event.type)
   );
 }
 

@@ -7,13 +7,14 @@ const cspHeader = `
     default-src 'self';
     script-src 'self' 'unsafe-eval' 'unsafe-inline';
     style-src 'self' 'unsafe-inline';
-    frame-src 'self' http://localhost:3000;
+    frame-src 'self' http://localhost:* http://127.0.0.1:*;
+    connect-src 'self' http://localhost:* http://127.0.0.1:*;
     img-src 'self' blob: data: https://api.slingacademy.com;
     font-src 'self';
     object-src 'none';
     base-uri 'self';
     form-action 'self';
-    frame-ancestors 'none';
+    frame-ancestors 'self' http://localhost:* http://127.0.0.1:*;
     upgrade-insecure-requests;
 `
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { addCorsHeaders } from "../../cors";
-import { sessions } from "../store";
+import { addCorsHeaders } from "../../../cors";
+import { getSession } from "../../../payment-session/store";
 
 // Helper to add CORS headers
 export async function OPTIONS() {
@@ -14,6 +14,8 @@ export async function GET(
 ) {
   try {
     const { id } = params;
+    
+    console.log(`GET request for session ID: ${id}`);
     
     // Special handling for test-session
     if (id === 'test-session') {
@@ -39,10 +41,11 @@ export async function GET(
       return addCorsHeaders(NextResponse.json(responseData));
     }
     
-    // Retrieve the session
-    const session = sessions[id];
+    // Retrieve the session using the improved getter function
+    const session = getSession(id);
     
     if (!session) {
+      console.log(`Session ${id} not found, returning 404`);
       return addCorsHeaders(
         NextResponse.json(
           { error: "Not Found", message: "Session not found" },
@@ -57,6 +60,8 @@ export async function GET(
       ...session,
       url: `${baseUrl}/payment-session/${id}`
     };
+    
+    console.log(`Successfully retrieved session ${id}:`, responseData);
     
     return addCorsHeaders(
       NextResponse.json(responseData, { status: 200 })

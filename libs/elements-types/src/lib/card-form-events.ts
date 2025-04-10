@@ -9,6 +9,8 @@ export const EvtSuccess = "CARD_FORM_SUCCESS";
 export const EvtError = "CARD_FORM_ERROR";
 export const EvtSubmit = "CARD_FORM_SUBMIT";
 export const EvtHello = "CARD_FORM_HELLO";
+export const EvtValidationResult = "VALIDATION_RESULT";
+
 export const CardFormSuccessEvent = z.object({
   url: z.string(),
   type: z.literal(EvtSuccess).default(EvtSuccess),
@@ -54,9 +56,22 @@ export const CardFormHelloEvent = z.object({
 });
 export type CardFormHelloEvent = z.infer<typeof CardFormHelloEvent>;
 
+export const CardFormValidationResultEvent = z.object({
+  url: z.string(),
+  type: z.literal(EvtValidationResult).default(EvtValidationResult),
+  data: z.object({
+    isValid: z.boolean(),
+    firstErrorField: z.string().optional(),
+    errors: z.record(z.any()).optional(),
+    errorMessages: z.record(z.string()).optional(),
+  }),
+});
+export type CardFormValidationResultEvent = z.infer<typeof CardFormValidationResultEvent>;
+
 export type CardFormEvent =
   | CardFormSuccessEvent
   | CardFormErrorEvent
   | CardFormSubmitEvent
   | CardFormReadyEvent
-  | CardFormHelloEvent;
+  | CardFormHelloEvent
+  | CardFormValidationResultEvent;

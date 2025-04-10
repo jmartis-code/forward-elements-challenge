@@ -19,9 +19,17 @@ export default function PaymentSessionPage({
   const [error, setError] = useState<string | null>(null);
 
   // Create the session URL using the NEXT_PUBLIC_URL env variable
-  const url = `${process.env.NEXT_PUBLIC_URL}/payment-session/${id}`;
+  const url = `${
+    process.env.NEXT_PUBLIC_URL || window.location.origin
+  }/payment-session/${id}`;
 
   useEffect(() => {
+    // For test-session id, skip the fetch and proceed immediately
+    if (id === "test-session") {
+      setIsLoading(false);
+      return;
+    }
+
     // Fetch the session data from our API endpoint
     const fetchSession = async () => {
       try {
