@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, ReactNode } from "react";
 import { CardFormProvider, useCardForm } from "@fwd/elements-react";
 import {
   EvtReady,
@@ -11,7 +11,7 @@ import {
   EvtHello,
   CardFormEvent,
 } from "@fwd/elements-types";
-import { useForm } from "react-hook-form";
+import { useForm, SubmitHandler } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
@@ -113,7 +113,7 @@ function CardFormContent({
 }: {
   sessionId: string;
   sessionUrl: string;
-}) {
+}): ReactNode {
   const { form: cardForm, isReady } = useCardForm();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [events, setEvents] = useState<CardFormEvent[]>([]);
@@ -122,6 +122,8 @@ function CardFormContent({
     backgroundColor: "#ffffff",
     theme: "light",
   });
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
 
   // Initialize the form with validation
   const form = useForm<CardFormSchema>({
@@ -172,55 +174,24 @@ function CardFormContent({
   useEffect(() => {
     // Add the validateForm method to the window object
     // This lets the parent window directly validate the form
-    (window as any).validateCardForm = async () => {
+    (window as any).validateCardForm = () => {
       try {
-        // Mark all fields as touched to ensure errors show
-        const fieldNames = Object.keys(form.getValues()) as Array<
-          keyof CardFormSchema
-        >;
-
-        // Set touched state for all fields
-        fieldNames.forEach((field) => {
-          form.setError(field, {
-            type: "validate",
-            message: `${
-              field === "cardNumber"
-                ? "Card number"
-                : field === "cardholderName"
-                ? "Cardholder name"
-                : field === "expiryDate"
-                ? "Expiry date"
-                : "CVV"
-            } is required`,
-          });
-        });
-
-        // Clear errors for valid fields
-        const cardNumberValid = await form.trigger("cardNumber");
-        if (cardNumberValid) form.clearErrors("cardNumber");
-
-        const cardholderNameValid = await form.trigger("cardholderName");
-        if (cardholderNameValid) form.clearErrors("cardholderName");
-
-        const expiryDateValid = await form.trigger("expiryDate");
-        if (expiryDateValid) form.clearErrors("expiryDate");
-
-        const cvvValid = await form.trigger("cvv");
-        if (cvvValid) form.clearErrors("cvv");
-
-        // Set form as submitted to ensure errors show
-        form.formState.isSubmitted = true;
-
-        // Update validation state and resize
-        setTimeout(() => {
-          sendSizeToParent();
-        }, 100);
-
-        const isValid =
-          cardNumberValid && cardholderNameValid && expiryDateValid && cvvValid;
-        return { isValid };
+        // Validate the form and return the result
+        return validateAndReportForm();
       } catch (error) {
         console.error("Validation error:", error);
+        return { isValid: false, error };
+      }
+    };
+
+    // Add the validateAndSubmitForm method to the window object
+    // This lets the parent window validate and submit the form
+    (window as any).validateAndSubmitForm = () => {
+      try {
+        // Validate and submit if valid
+        return validateAndSubmitForm();
+      } catch (error) {
+        console.error("Validation and submit error:", error);
         return { isValid: false, error };
       }
     };
@@ -228,16 +199,102 @@ function CardFormContent({
     return () => {
       // Clean up when component unmounts
       delete (window as any).validateCardForm;
+      delete (window as any).validateAndSubmitForm;
     };
   }, [form, sendSizeToParent]);
 
+  // Function to validate form and report errors to parent
+  const validateAndReportForm = useCallback(() => {
+    // First clear all errors
+    form.clearErrors();
+
+    // Then trigger validation on all fields and check results
+    // Don't await here - use the synchronous trigger to get current field state
+    const isValidating = form.trigger();
+
+    // Set form state to submitted to show errors even if user hasn't submitted
+    // Mark form as submitted to show all errors
+    Object.keys(form.getValues()).forEach((field) => {
+      const value = form.getValues(field as any);
+      if (!value) {
+        form.setError(field as any, {
+          type: "required",
+          message: `${field} is required`,
+        });
+      }
+    });
+
+    // Get the current validation state and errors
+    const isValid = !Object.keys(form.formState.errors).length;
+    const errors = form.formState.errors;
+
+    // Send validation result to parent
+    window.parent.postMessage(
+      {
+        type: "CARD_FORM_HELLO",
+        url: sessionUrl,
+        data: {
+          message: "validation_result",
+          isValid,
+          firstErrorField: Object.keys(errors)[0] || undefined,
+          errors: Object.entries(errors).reduce((acc, [field, error]) => {
+            acc[field] = {
+              type: error?.type?.toString() || "unknown",
+              message: error?.message?.toString() || field + " is invalid",
+            };
+            return acc;
+          }, {} as Record<string, { type: string; message: string }>),
+        },
+      },
+      "*"
+    );
+
+    return isValid;
+  }, [form, sessionUrl]);
+
+  // Listen for messages from parent window
+  const handleMessage = useCallback(
+    (event: MessageEvent<any>) => {
+      const { data } = event;
+      if (data.type === "VALIDATE_FORM") {
+        validateAndReportForm();
+      } else if (data.type === "FOCUS_FIELD" && data.data?.fieldName) {
+        // Focus on the specified field
+        setTimeout(() => {
+          const inputElement = document.querySelector(
+            `input[name="${data.data.fieldName}"]`
+          );
+          if (inputElement) {
+            (inputElement as HTMLInputElement).focus();
+          }
+        }, 50);
+      } else if (data.type === "submit-form") {
+        form.handleSubmit(onSubmit)();
+      } else if (data.type === "reset-form") {
+        form.reset();
+        setSubmitError(null);
+        setShowSuccessMessage(false);
+      }
+    },
+    [validateAndReportForm, form]
+  );
+
   // Handle parent window messages
   useEffect(() => {
-    // Notify parent window that the card form is ready
-    window.parent.postMessage({ type: EvtReady, url: sessionUrl }, "*");
+    window.addEventListener("message", handleMessage);
+    return () => {
+      window.removeEventListener("message", handleMessage);
+    };
+  }, [handleMessage]);
 
-    // Listen for style customization messages and validation requests
-    const handleMessage = (event: MessageEvent) => {
+  // Notify parent window that the card form is ready
+  useEffect(() => {
+    window.parent.postMessage({ type: EvtReady, url: sessionUrl }, "*");
+  }, [sessionUrl]);
+
+  // Listen for style customization messages and validation requests
+  useEffect(() => {
+    const handleStyleMessages = (event: MessageEvent<any>) => {
       // Handle style customization
       if (
         event.data?.type === "CUSTOMIZE_FORM_STYLE" &&
@@ -249,76 +306,29 @@ function CardFormContent({
           theme: event.data.style?.theme || "light",
         });
       }
-
-      // Handle validation requests
-      if (
-        event.data?.type === "VALIDATE_CARD_FORM" &&
-        event.data?.url === sessionUrl
-      ) {
-        // Use the same validation logic as validateCardForm
-        const fieldNames = Object.keys(form.getValues()) as Array<
-          keyof CardFormSchema
-        >;
-
-        // Set touched state for all fields
-        fieldNames.forEach((field) => {
-          form.setError(field, {
-            type: "validate",
-            message: `${
-              field === "cardNumber"
-                ? "Card number"
-                : field === "cardholderName"
-                ? "Cardholder name"
-                : field === "expiryDate"
-                ? "Expiry date"
-                : "CVV"
-            } is required`,
-          });
-        });
-
-        // Trigger validation to clear errors for valid fields
-        form.trigger().then(() => {
-          // Force form to show validation state
-          form.formState.isSubmitted = true;
-
-          // Force a UI update by setting a field value
-          const cardNumber = form.getValues().cardNumber;
-          form.setValue("cardNumber", cardNumber);
-
-          // Send size update after validation to adjust for error messages
-          setTimeout(() => {
-            sendSizeToParent();
-          }, 100);
-        });
-      }
-
-      // Handle submit request from parent
-      if (event.data?.type === "submit" && event.data?.url === sessionUrl) {
-        form.handleSubmit(onSubmit)();
-      }
-
-      // Send size information to parent
-      sendSizeToParent();
     };
 
-    window.addEventListener("message", handleMessage);
+    window.addEventListener("message", handleStyleMessages);
 
-    // Send initial size information
+    // Send size information to parent
     sendSizeToParent();
 
-    // Set up resize observer to detect content size changes
-    const resizeObserver = new ResizeObserver(() => {
-      sendSizeToParent();
-    });
-
-    // Observe the document body for size changes
-    resizeObserver.observe(document.body);
-
     return () => {
-      window.removeEventListener("message", handleMessage);
-      resizeObserver.disconnect();
+      window.removeEventListener("message", handleStyleMessages);
     };
-  }, [sessionUrl, sendSizeToParent, form]);
+  }, [sessionUrl, sendSizeToParent]);
+
+  // Function to validate and submit if valid
+  const validateAndSubmitForm = () => {
+    const isValid = validateAndReportForm();
+
+    if (isValid) {
+      // If valid, proceed with submission
+      form.handleSubmit(onSubmit)();
+    }
+
+    return isValid;
+  };
 
   // Format card number with spaces
   const formatCardNumber = (value: string) => {
@@ -338,6 +348,27 @@ function CardFormContent({
     }
   };
 
+  // Set up real-time validation to clear errors when valid
+  useEffect(() => {
+    // Clear errors when fields become valid
+    const subscription = form.watch((value, { name }) => {
+      if (!name) return;
+
+      // Reduced timeout for faster feedback
+      setTimeout(async () => {
+        // Check this specific field and clear its error if valid
+        const fieldValid = await form.trigger(name as any, {
+          shouldFocus: false,
+        });
+        if (fieldValid) {
+          form.clearErrors(name as any);
+        }
+      }, 100); // Reduced from 300ms to 100ms
+    });
+
+    return () => subscription.unsubscribe();
+  }, [form]);
+
   // Format expiry date as MM/YY
   const formatExpiryDate = (value: string) => {
     const v = value.replace(/\s+/g, "").replace(/[^0-9]/gi, "");
@@ -350,79 +381,99 @@ function CardFormContent({
   };
 
   // Form submission handler
-  const onSubmit = async (data: CardFormSchema) => {
-    setIsSubmitting(true);
+  const onSubmit: SubmitHandler<CardFormSchema> = async (data) => {
+    // Early validation check - clear previous errors
+    setSubmitError(null);
+
+    // Define validation function upfront to avoid reference error
+    const validateAndReportForm = async () => {
+      try {
+        // Attempt to validate the form with the current values
+        const formValues = form.getValues();
+        await CardFormSchema.parseAsync(formValues);
+        return true;
+      } catch (error) {
+        console.error("Form validation error:", error);
+        // Update form errors and return false
+        if (error instanceof z.ZodError) {
+          error.errors.forEach((err) => {
+            const path = err.path[0] as keyof CardFormSchema;
+            form.setError(path, { message: err.message });
+          });
+        }
+        return false;
+      }
+    };
 
     try {
-      // Notify parent window that form is being submitted
-      window.parent.postMessage(
-        {
-          type: EvtSubmit,
-          url: sessionUrl,
-        },
-        "*"
-      );
+      if (await validateAndReportForm()) {
+        // Form is valid, proceed
+        setIsSubmitting(true);
 
-      // Tokenize card data using the CardForm API
-      await cardForm.submit();
-
-      // Success will be handled through the cardForm subscription in the useEffect
-    } catch (error) {
-      // Send error event to parent window
-      window.parent.postMessage(
-        {
-          type: EvtError,
-          url: sessionUrl,
-          data: {
-            error: ErrValidation,
-            message: `Failed to process card details: ${
-              error instanceof Error ? error.message : "Unknown error"
-            }`,
+        // Communicate data to parent
+        window.parent.postMessage(
+          {
+            type: "card-details",
+            payload: {
+              cardholderName: data.cardholderName,
+              cardNumber: data.cardNumber,
+              expiryDate: data.expiryDate,
+              cvv: data.cvv,
+            },
           },
-        },
-        "*"
-      );
-    } finally {
+          "*"
+        );
+
+        // Set success state after a slight delay to give feedback
+        setTimeout(() => {
+          setShowSuccessMessage(true);
+          setIsSubmitting(false);
+
+          // Hide success message after 3 seconds
+          setTimeout(() => {
+            setShowSuccessMessage(false);
+          }, 3000);
+        }, 1000);
+      }
+    } catch (error) {
+      setSubmitError("An error occurred while submitting the form.");
       setIsSubmitting(false);
     }
   };
 
   return (
     <div
-      className="w-full max-w-full py-4 flex flex-col justify-center"
-      style={{
-        backgroundColor: formStyles.backgroundColor,
-      }}
+      className="px-4 py-4 bg-white rounded-md shadow-sm"
+      style={{ minHeight: "380px", height: "380px" }}
     >
       <style jsx global>{`
-        /* Enhanced error message styling */
-        .form-error-message {
-          color: #ef4444;
-          font-size: 0.8rem;
+        /* Match the checkout form error styling */
+        .form-message {
+          color: hsl(var(--destructive)) !important;
+          font-size: 0.75rem;
           margin-top: 0.25rem;
           font-weight: 500;
-          display: block !important;
+          opacity: 1 !important;
           visibility: visible !important;
-        }
-
-        /* Make error borders more visible */
-        .input-error {
-          border-color: #ef4444 !important;
-          border-width: 1.5px !important;
         }
       `}</style>
 
-      <h2
-        className="text-xl font-semibold text-center mb-4"
-        style={{ color: formStyles.primaryColor }}
-      >
-        Payment Details
-      </h2>
+      {submitError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-md mb-4 text-xs">
+          <p>{submitError}</p>
+        </div>
+      )}
+
+      {showSuccessMessage && (
+        <div className="bg-green-50 border border-green-200 text-green-700 p-3 rounded-md mb-4 text-xs">
+          <p>Payment completed successfully!</p>
+        </div>
+      )}
+
+      <h2 className="text-lg font-medium mb-4">Payment Information</h2>
+
       <Form {...form}>
-        <form
-          onSubmit={form.handleSubmit(onSubmit)}
-          className="space-y-4 flex flex-col justify-between"
-        >
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <FormField
             control={form.control}
             name="cardNumber"
@@ -438,12 +489,10 @@ function CardFormContent({
                       field.onChange(formatCardNumber(e.target.value));
                     }}
                     maxLength={19}
-                    className={`font-mono h-9 ${
-                      fieldState.error ? "input-error" : ""
-                    }`}
+                    className="font-mono h-9"
                   />
                 </FormControl>
-                <FormMessage className="form-error-message" />
+                <FormMessage />
               </FormItem>
             )}
           />
@@ -455,13 +504,9 @@ function CardFormContent({
               <FormItem>
                 <FormLabel>Cardholder Name</FormLabel>
                 <FormControl>
-                  <Input
-                    placeholder="John Doe"
-                    {...field}
-                    className={`h-9 ${fieldState.error ? "input-error" : ""}`}
-                  />
+                  <Input placeholder="John Doe" {...field} className="h-9" />
                 </FormControl>
-                <FormMessage className="form-error-message" />
+                <FormMessage />
               </FormItem>
             )}
           />
@@ -482,10 +527,10 @@ function CardFormContent({
                         field.onChange(formatExpiryDate(e.target.value));
                       }}
                       maxLength={5}
-                      className={`h-9 ${fieldState.error ? "input-error" : ""}`}
+                      className="h-9"
                     />
                   </FormControl>
-                  <FormMessage className="form-error-message" />
+                  <FormMessage />
                 </FormItem>
               )}
             />
@@ -502,10 +547,10 @@ function CardFormContent({
                       {...field}
                       maxLength={4}
                       type="password"
-                      className={`h-9 ${fieldState.error ? "input-error" : ""}`}
+                      className="h-9"
                     />
                   </FormControl>
-                  <FormMessage className="form-error-message" />
+                  <FormMessage />
                 </FormItem>
               )}
             />
