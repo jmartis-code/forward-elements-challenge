@@ -133,9 +133,16 @@ function CardFormContent({
   console.log("Session URL:", sessionUrl);
   console.log("URL search params:", Object.fromEntries(urlParams.entries()));
 
-  // HARDCODE the correct amount for this cart: $178.62
-  const sessionAmount = 17862; // Hardcoded to $178.62 in cents
-  console.log("Using hardcoded cart amount:", sessionAmount, "cents ($178.62)");
+  // Get amount from URL params or use a default if not available
+  const sessionAmount = urlParams.has("amount")
+    ? parseInt(urlParams.get("amount") || "0", 10)
+    : 0;
+
+  if (sessionAmount > 0) {
+    console.log("Session amount from URL:", sessionAmount, "cents");
+  } else {
+    console.log("No amount specified in URL parameters");
+  }
 
   const { form: cardForm, isReady } = useCardForm();
   const [isSubmitting, setIsSubmitting] = useState(false);
