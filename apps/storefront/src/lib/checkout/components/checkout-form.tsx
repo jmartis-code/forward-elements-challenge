@@ -916,7 +916,7 @@ export function CheckoutForm() {
         />
       </div>
 
-      <CardInput key={cardInputId} className="-mx-4" />
+      <CardInput key={cardInputId} className="" />
 
       {/* <div className="font-mono text-xs">
         <span>Events from card form:</span>

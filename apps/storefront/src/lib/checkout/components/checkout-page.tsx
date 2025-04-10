@@ -205,19 +205,16 @@ export function CheckoutPage({ cart }: { cart: CartItem[] }) {
       <div className="px-4 py-8 max-w-screen-sm mx-auto w-full space-y-4">
         <h1 className="text-2xl font-bold text-center mb-6">Checkout</h1>
         <CheckoutFormProvider session={session}>
+          <div className="mb-4">
+            <CheckoutSummary cart={cart} />
+          </div>
           {!paymentSuccess ? (
             <>
-              <CheckoutSummary cart={cart} />
               <CheckoutForm />
               <CheckoutButton />
             </>
           ) : (
             <>
-              {/* Order summary */}
-              <div className="mb-8 border rounded-lg p-4 bg-white">
-                <CheckoutSummary cart={cart} />
-              </div>
-
               {/* Payment success UI */}
               <div className="w-full">
                 <div className="bg-green-50 border border-green-200 rounded-lg p-6 space-y-4">

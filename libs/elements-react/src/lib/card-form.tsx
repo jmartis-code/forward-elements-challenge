@@ -138,8 +138,6 @@ export const CardInput = ({ className }: { className?: string }) => {
       style={{
         minHeight: "500px",
         height: "500px",
-        border: "1px solid #e2e8f0",
-        borderRadius: "0.375rem",
       }}
     />
   );

@@ -28,9 +28,19 @@ export function CheckoutButton() {
 
   return (
     <div className="w-full flex justify-center items-center">
-      <Button onClick={handleSubmit} disabled={!isReady || isProcessing}>
-        {isProcessing && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-        Submit Order
+      <Button
+        onClick={handleSubmit}
+        disabled={!isReady || isProcessing}
+        className="w-full py-6 text-lg font-medium"
+      >
+        {isProcessing ? (
+          <>
+            <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+            {isValidating ? "Validating..." : "Processing Payment..."}
+          </>
+        ) : (
+          "Submit Order"
+        )}
       </Button>
     </div>
   );

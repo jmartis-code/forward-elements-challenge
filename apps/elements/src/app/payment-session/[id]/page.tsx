@@ -83,7 +83,7 @@ export default function PaymentSessionPage({
   return (
     <>
       <IframeStyles />
-      <div className="p-4 min-h-screen" style={{ height: "100vh" }}>
+      <div className="w-full" style={{ minHeight: "350px", height: "350px" }}>
         <CardDataForm sessionUrl={url} />
       </div>
     </>

@@ -26,7 +26,6 @@ import {
   FormLabel,
   FormMessage,
 } from "@fwd/ui/components/form";
-import { Loader2 } from "lucide-react";
 
 // Validation schema for the card form
 const CardFormSchema = z.object({
@@ -633,7 +632,7 @@ function CardFormContent({
   return (
     <div
       id="card-element-container"
-      className="py-4 bg-white rounded-md shadow-sm"
+      className="py-4 bg-white"
       style={{ minHeight: "380px" }}
     >
       <style jsx global>{`
