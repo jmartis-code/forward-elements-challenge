@@ -242,11 +242,14 @@ export const CheckoutFormProvider = ({
           // Make sure the message is from our iframe
           if (event.source !== iframeElement.contentWindow) return;
 
+          console.log("Message received from iframe:", event.data);
+
           // Check for validation results in the hello event
           if (
             event.data?.type === "CARD_FORM_HELLO" &&
             event.data?.data?.message === "validation_result"
           ) {
+            console.log("Validation result received:", event.data.data);
             // Remove the event listener to avoid memory leaks
             window.removeEventListener("message", handleMessage);
 
@@ -275,14 +278,22 @@ export const CheckoutFormProvider = ({
         // Add the message event listener
         window.addEventListener("message", handleMessage);
 
-        // Set a timeout to reject the promise after 5 seconds
+        // Set a timeout to reject the promise after 15 seconds (increased from 5)
         setTimeout(() => {
+          console.warn(
+            "Validation timeout about to occur. No response received from iframe."
+          );
           window.removeEventListener("message", handleMessage);
           reject(new Error("Validation timed out"));
-        }, 5000);
+        }, 15000);
       });
 
       // Send the validation request message to the iframe
+      console.log("Sending validation request to iframe:", {
+        type: "VALIDATE_FORM",
+        url: session.url,
+      });
+
       iframeElement.contentWindow.postMessage(
         {
           type: "VALIDATE_FORM",

@@ -114,6 +114,8 @@ function CardFormContent({
   sessionId: string;
   sessionUrl: string;
 }): ReactNode {
+  console.log("CardFormContent rendered", { sessionId, sessionUrl });
+
   const { form: cardForm, isReady } = useCardForm();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [events, setEvents] = useState<CardFormEvent[]>([]);
@@ -124,6 +126,17 @@ function CardFormContent({
   });
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+
+  // Add console logs for debugging
+  useEffect(() => {
+    console.log("CardFormContent mounted");
+    console.log("CardForm ready status:", isReady);
+    console.log("CardForm available:", cardForm);
+
+    return () => {
+      console.log("CardFormContent unmounted");
+    };
+  }, [isReady, cardForm]);
 
   // Initialize the form with validation
   const form = useForm<CardFormSchema>({
@@ -172,9 +185,12 @@ function CardFormContent({
 
   // Expose form validation function to the parent window
   useEffect(() => {
+    console.log("Setting up window validation methods");
+
     // Add the validateForm method to the window object
     // This lets the parent window directly validate the form
     (window as any).validateCardForm = () => {
+      console.log("window.validateCardForm called");
       try {
         // Validate the form and return the result
         return validateAndReportForm();
@@ -187,6 +203,7 @@ function CardFormContent({
     // Add the validateAndSubmitForm method to the window object
     // This lets the parent window validate and submit the form
     (window as any).validateAndSubmitForm = () => {
+      console.log("window.validateAndSubmitForm called");
       try {
         // Validate and submit if valid
         return validateAndSubmitForm();
@@ -205,6 +222,8 @@ function CardFormContent({
 
   // Function to validate form and report errors to parent
   const validateAndReportForm = useCallback(() => {
+    console.log("validateAndReportForm called - validating form now");
+
     // First clear all errors
     form.clearErrors();
 
@@ -228,26 +247,30 @@ function CardFormContent({
     const isValid = !Object.keys(form.formState.errors).length;
     const errors = form.formState.errors;
 
-    // Send validation result to parent
-    window.parent.postMessage(
-      {
-        type: "CARD_FORM_HELLO",
-        url: sessionUrl,
-        data: {
-          message: "validation_result",
-          isValid,
-          firstErrorField: Object.keys(errors)[0] || undefined,
-          errors: Object.entries(errors).reduce((acc, [field, error]) => {
-            acc[field] = {
-              type: error?.type?.toString() || "unknown",
-              message: error?.message?.toString() || field + " is invalid",
-            };
-            return acc;
-          }, {} as Record<string, { type: string; message: string }>),
-        },
+    console.log("Validation result:", { isValid, errors });
+
+    // Prepare the response message
+    const responseMessage = {
+      type: "CARD_FORM_HELLO",
+      url: sessionUrl,
+      data: {
+        message: "validation_result",
+        isValid,
+        firstErrorField: Object.keys(errors)[0] || undefined,
+        errors: Object.entries(errors).reduce((acc, [field, error]) => {
+          acc[field] = {
+            type: error?.type?.toString() || "unknown",
+            message: error?.message?.toString() || field + " is invalid",
+          };
+          return acc;
+        }, {} as Record<string, { type: string; message: string }>),
       },
-      "*"
-    );
+    };
+
+    console.log("Sending validation result to parent:", responseMessage);
+
+    // Send validation result to parent
+    window.parent.postMessage(responseMessage, "*");
 
     return isValid;
   }, [form, sessionUrl]);
@@ -255,10 +278,14 @@ function CardFormContent({
   // Listen for messages from parent window
   const handleMessage = useCallback(
     (event: MessageEvent<any>) => {
+      console.log("Message received from parent:", event.data);
+
       const { data } = event;
-      if (data.type === "VALIDATE_FORM") {
+      if (data.type === "VALIDATE_FORM" || data.type === "VALIDATE_CARD_FORM") {
+        console.log("Validating form due to message from parent");
         validateAndReportForm();
       } else if (data.type === "FOCUS_FIELD" && data.data?.fieldName) {
+        console.log("Focusing field:", data.data.fieldName);
         // Focus on the specified field
         setTimeout(() => {
           const inputElement = document.querySelector(
@@ -268,15 +295,73 @@ function CardFormContent({
             (inputElement as HTMLInputElement).focus();
           }
         }, 50);
-      } else if (data.type === "submit-form") {
-        form.handleSubmit(onSubmit)();
+      } else if (
+        data.type === "submit-form" ||
+        data.type === "VALIDATE_AND_SUBMIT"
+      ) {
+        console.log("Submit form message received from parent");
+        // Use inline function to avoid dependency issues
+        form.handleSubmit((formData) => {
+          // Early validation check - clear previous errors
+          setSubmitError(null);
+          setIsSubmitting(true);
+
+          console.log("Starting card tokenization process...");
+
+          // Try to tokenize
+          cardForm.submit().then(
+            (result) => {
+              console.log("Tokenization successful:", result);
+
+              // Prepare response data
+              const responseData = {
+                methodId: result.methodId,
+                last4: formData.cardNumber.slice(-4),
+                expiryMonth: formData.expiryDate.split("/")[0],
+                expiryYear: `20${formData.expiryDate.split("/")[1]}`,
+              };
+
+              console.log("Sending tokenized data to parent:", responseData);
+
+              // Send the tokenized result to the parent window
+              window.parent.postMessage(
+                {
+                  type: EvtSuccess,
+                  url: sessionUrl,
+                  data: responseData,
+                },
+                "*"
+              );
+
+              setShowSuccessMessage(true);
+              setTimeout(() => setShowSuccessMessage(false), 3000);
+              setIsSubmitting(false);
+            },
+            (error) => {
+              console.error("Tokenization failed:", error);
+              setSubmitError(
+                "Failed to process payment method. Please check your card details."
+              );
+              setIsSubmitting(false);
+            }
+          );
+        })();
       } else if (data.type === "reset-form") {
+        console.log("Reset form message received from parent");
         form.reset();
         setSubmitError(null);
         setShowSuccessMessage(false);
       }
     },
-    [validateAndReportForm, form]
+    [
+      validateAndReportForm,
+      form,
+      cardForm,
+      sessionUrl,
+      setIsSubmitting,
+      setSubmitError,
+      setShowSuccessMessage,
+    ]
   );
 
   // Handle parent window messages
@@ -384,66 +469,76 @@ function CardFormContent({
   const onSubmit: SubmitHandler<CardFormSchema> = async (data) => {
     // Early validation check - clear previous errors
     setSubmitError(null);
+    setIsSubmitting(true);
 
-    // Define validation function upfront to avoid reference error
-    const validateAndReportForm = async () => {
-      try {
-        // Attempt to validate the form with the current values
-        const formValues = form.getValues();
-        await CardFormSchema.parseAsync(formValues);
-        return true;
-      } catch (error) {
-        console.error("Form validation error:", error);
-        // Update form errors and return false
-        if (error instanceof z.ZodError) {
-          error.errors.forEach((err) => {
-            const path = err.path[0] as keyof CardFormSchema;
-            form.setError(path, { message: err.message });
-          });
-        }
-        return false;
-      }
-    };
+    console.log("Starting card tokenization process...");
 
     try {
-      if (await validateAndReportForm()) {
-        // Form is valid, proceed
-        setIsSubmitting(true);
+      // Tokenize card data using the CardForm API
+      console.log("Calling cardForm.submit()...");
+      const tokenizationResult = await cardForm.submit();
+      console.log("Tokenization successful:", tokenizationResult);
 
-        // Communicate data to parent
-        window.parent.postMessage(
-          {
-            type: "card-details",
-            payload: {
-              cardholderName: data.cardholderName,
-              cardNumber: data.cardNumber,
-              expiryDate: data.expiryDate,
-              cvv: data.cvv,
-            },
-          },
-          "*"
-        );
+      // Prepare response data
+      const responseData = {
+        methodId: tokenizationResult.methodId,
+        last4: data.cardNumber.slice(-4),
+        expiryMonth: data.expiryDate.split("/")[0],
+        expiryYear: `20${data.expiryDate.split("/")[1]}`,
+      };
 
-        // Set success state after a slight delay to give feedback
-        setTimeout(() => {
-          setShowSuccessMessage(true);
-          setIsSubmitting(false);
+      console.log("Sending tokenized data to parent:", responseData);
 
-          // Hide success message after 3 seconds
-          setTimeout(() => {
-            setShowSuccessMessage(false);
-          }, 3000);
-        }, 1000);
-      }
+      // Send the tokenized result to the parent window
+      window.parent.postMessage(
+        {
+          type: EvtSuccess,
+          url: sessionUrl,
+          data: responseData,
+        },
+        "*"
+      );
+
+      console.log("Success message sent to parent");
+
+      // Set success state to show feedback to the user
+      setShowSuccessMessage(true);
+
+      // Hide success message after 3 seconds
+      setTimeout(() => {
+        setShowSuccessMessage(false);
+      }, 3000);
     } catch (error) {
-      setSubmitError("An error occurred while submitting the form.");
+      console.error("Error tokenizing card:", error);
+
+      // Send error to parent window
+      window.parent.postMessage(
+        {
+          type: EvtError,
+          url: sessionUrl,
+          data: {
+            error: ErrValidation,
+            message:
+              error instanceof Error
+                ? error.message
+                : "Failed to process payment method",
+          },
+        },
+        "*"
+      );
+
+      // Show error message to the user
+      setSubmitError(
+        "Failed to process payment method. Please check your card details."
+      );
+    } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
     <div
-      className="px-4 py-4 bg-white rounded-md shadow-sm"
+      className="py-4 bg-white rounded-md shadow-sm"
       style={{ minHeight: "380px", height: "380px" }}
     >
       <style jsx global>{`
@@ -556,7 +651,7 @@ function CardFormContent({
             />
           </div>
 
-          {/* Debug information, can be removed in production */}
+          {/* Debug information */}
           {events.length > 0 && (
             <div className="font-mono text-xs mt-4 overflow-hidden">
               <details>
