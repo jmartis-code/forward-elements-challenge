@@ -728,7 +728,7 @@ function CardFormContent({
           </div>
         )}
 
-        <h2 className="text-lg font-medium mb-4">Payment Information</h2>
+        <h2 className="text-lg font-bold mb-4">Payment Information</h2>
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">

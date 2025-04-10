@@ -808,6 +808,7 @@ export function CheckoutForm() {
 
   return (
     <Form {...form}>
+      <h2 className="text-lg font-bold mb-4">Shipping Information</h2>
       <div className="w-full flex flex-col-2 gap-4">
         <FormField
           control={form.control}
