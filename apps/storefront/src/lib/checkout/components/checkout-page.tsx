@@ -3,6 +3,7 @@
 import { CardFormProvider } from "@fwd/elements-react";
 import { CheckoutForm } from "./checkout-form";
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 import { CheckoutFormProvider } from "./checkout-form";
 import { CheckoutSummary } from "./checkout-summary";
@@ -13,6 +14,7 @@ import { client } from "@/lib/query-client";
 import { clearCart } from "@/lib/cart/cart.actions";
 
 export function CheckoutPage({ cart }: { cart: CartItem[] }) {
+  const router = useRouter();
   const [session, setSession] = useState<CreatePaymentSessionResponse | null>(
     null
   );
@@ -29,6 +31,13 @@ export function CheckoutPage({ cart }: { cart: CartItem[] }) {
     methodId?: string;
     last4?: string;
   } | null>(null);
+
+  // Redirect if cart is empty
+  useEffect(() => {
+    if (cart.length === 0) {
+      router.push("/");
+    }
+  }, [cart, router]);
 
   // Listen for payment success events and clear the cart
   useEffect(() => {
@@ -175,6 +184,19 @@ export function CheckoutPage({ cart }: { cart: CartItem[] }) {
 
     createSession();
   }, [cart]);
+
+  // If cart is empty, show a message while redirecting
+  if (cart.length === 0) {
+    return (
+      <div className="px-4 py-8 max-w-screen-sm mx-auto w-full">
+        <h1 className="text-2xl font-bold text-center mb-6">Checkout</h1>
+        <div className="text-center p-8 bg-gray-50 rounded-lg">
+          <p className="text-lg mb-4">Your cart is empty</p>
+          <p>Redirecting to homepage...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
