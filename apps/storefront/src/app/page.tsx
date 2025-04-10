@@ -1,17 +1,29 @@
-import { CartButton, CartButtonSkeleton } from "@/lib/cart/components/cart-button";
-import { ProductList, ProductListSkeleton } from "@/lib/product/components/product-list";
+import {
+  CartButton,
+  CartButtonSkeleton,
+} from "@/lib/cart/components/cart-button";
+import {
+  ProductList,
+  ProductListSkeleton,
+} from "@/lib/product/components/product-list";
 import { Skeleton } from "@fwd/ui/components/skeleton";
-import { createLoader, parseAsInteger, parseAsString, type SearchParams } from "nuqs/server";
+import {
+  createLoader,
+  parseAsInteger,
+  parseAsString,
+  type SearchParams,
+} from "nuqs/server";
 import { Suspense } from "react";
+
 interface IndexProps {
-  searchParams: SearchParams
+  searchParams: SearchParams;
 }
 
 const searchParams = {
   limit: parseAsInteger.withDefault(10),
   offset: parseAsInteger.withDefault(0),
-  search: parseAsString.withDefault(''),
-}
+  search: parseAsString.withDefault(""),
+};
 const loadSearchParams = createLoader(searchParams);
 
 export default async function Index({ searchParams }: IndexProps) {
@@ -32,4 +44,4 @@ export default async function Index({ searchParams }: IndexProps) {
       </div>
     </div>
   );
-};
+}

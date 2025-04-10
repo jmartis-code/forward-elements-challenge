@@ -9,19 +9,38 @@ import { useEffect, useState } from "react";
 
 export type PaymentSessionPageProps = {
   params: { id: string };
+  searchParams: Record<string, string | string[]>;
 };
 
 export default function PaymentSessionPage({
   params,
+  searchParams,
 }: PaymentSessionPageProps) {
   const { id } = params;
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Create the session URL using the NEXT_PUBLIC_URL env variable
+  // Create search params string from all parameters
+  const searchParamsString = new URLSearchParams();
+  Object.entries(searchParams).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      value.forEach((v) => searchParamsString.append(key, v));
+    } else {
+      searchParamsString.append(key, value);
+    }
+  });
+
+  // Log the search params for debugging
+  console.log("Payment session search params:", searchParams);
+  console.log("Formatted search params string:", searchParamsString.toString());
+
+  // Create the session URL using the NEXT_PUBLIC_URL env variable and include search params
+  const searchString = searchParamsString.toString();
   const url = `${
     process.env.NEXT_PUBLIC_URL || window.location.origin
-  }/payment-session/${id}`;
+  }/payment-session/${id}${searchString ? `?${searchString}` : ""}`;
+
+  console.log("Final session URL with params:", url);
 
   useEffect(() => {
     // For test-session id, skip the fetch and proceed immediately

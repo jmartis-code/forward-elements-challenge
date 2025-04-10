@@ -5,5 +5,8 @@ export default async function Page() {
     data: [],
   };
 
-  return <CheckoutPage cart={cart.data} />;
+  // Add timestamp to force new component instance when page loads
+  const pageKey = Date.now();
+
+  return <CheckoutPage key={pageKey} cart={cart.data} />;
 }

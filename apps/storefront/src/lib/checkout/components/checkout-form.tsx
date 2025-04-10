@@ -66,6 +66,15 @@ type CheckoutFormContextType = {
   events: CardFormEvent[];
   paymentSuccess: boolean;
   paymentError: string | null;
+  paymentResult: {
+    id: string;
+    amount: number;
+    currency: string;
+    status: string;
+    created_at: string;
+    methodId: string;
+    last4: string;
+  } | null;
 };
 
 export const CheckoutFormContext =
@@ -84,6 +93,17 @@ export const CheckoutFormProvider = ({
   const [events, setEvents] = useState<CardFormEvent[]>([]);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+
+  // State to store payment result data
+  const [paymentResult, setPaymentResult] = useState<{
+    id: string;
+    amount: number;
+    currency: string;
+    status: string;
+    created_at: string;
+    methodId: string;
+    last4: string;
+  } | null>(null);
 
   // Initialize form before we try to use it in processPayment
   const form = useForm<CheckoutFormSchema>({
@@ -114,8 +134,37 @@ export const CheckoutFormProvider = ({
       }
     });
 
+    // Add a listener for PAYMENT_COMPLETE messages
+    const handlePaymentComplete = (event: MessageEvent) => {
+      // Check source and message type
+      if (event.data?.type === "PAYMENT_COMPLETE") {
+        console.log("Received PAYMENT_COMPLETE message", event.data);
+
+        // Get the payment data
+        const paymentData = event.data.data?.payment;
+        if (paymentData) {
+          // Clear cart from localStorage
+          localStorage.removeItem("cart");
+
+          // Dispatch cart cleared event
+          window.dispatchEvent(new CustomEvent("cart:cleared"));
+
+          setPaymentSuccess(true);
+          setPaymentError(null);
+          toast.success("Payment Successful", {
+            description: `Payment of $${(paymentData.amount / 100).toFixed(
+              2
+            )} has been processed.`,
+          });
+        }
+      }
+    };
+
+    window.addEventListener("message", handlePaymentComplete);
+
     return () => {
       unsubscribe();
+      window.removeEventListener("message", handlePaymentComplete);
     };
   }, [cardForm, form]);
 
@@ -153,6 +202,13 @@ export const CheckoutFormProvider = ({
 
       if (response.status === 201) {
         console.log("Payment processed successfully:", response.body);
+
+        // Clear cart from localStorage
+        localStorage.removeItem("cart");
+
+        // Dispatch cart cleared event
+        window.dispatchEvent(new CustomEvent("cart:cleared"));
+
         setPaymentSuccess(true);
         setPaymentError(null);
         toast.success("Payment Successful", {
@@ -530,6 +586,7 @@ export const CheckoutFormProvider = ({
       events,
       paymentSuccess,
       paymentError,
+      paymentResult,
     }),
     [
       form,
@@ -540,9 +597,90 @@ export const CheckoutFormProvider = ({
       events,
       paymentSuccess,
       paymentError,
+      paymentResult,
     ]
   );
 
+  // Add handler to store payment result data when PAYMENT_COMPLETE is received
+  useEffect(() => {
+    const handlePaymentResult = (event: MessageEvent) => {
+      console.log("Received message in checkout form:", event.data?.type);
+
+      // Handle both PAYMENT_COMPLETE and EvtSuccess events
+      if (
+        (event.data?.type === "PAYMENT_COMPLETE" ||
+          event.data?.type === "EvtSuccess") &&
+        event.data?.data?.payment
+      ) {
+        console.log(
+          "Processing payment message with data:",
+          event.data.data.payment
+        );
+
+        // Set payment result
+        setPaymentResult(event.data.data.payment);
+
+        // Also clear the cart from localStorage
+        localStorage.removeItem("cart");
+
+        // Dispatch cart cleared event with payment data
+        window.dispatchEvent(
+          new CustomEvent("cart:cleared", {
+            detail: { payment: event.data.data.payment },
+          })
+        );
+      }
+    };
+
+    window.addEventListener("message", handlePaymentResult);
+
+    return () => {
+      window.removeEventListener("message", handlePaymentResult);
+    };
+  }, []);
+
+  // Add handler for the cart:cleared event
+  useEffect(() => {
+    const handleCartCleared = () => {
+      console.log("Cart cleared event detected");
+
+      // Send message to iframe
+      const iframeElement = document.querySelector("iframe");
+      if (iframeElement && iframeElement.contentWindow) {
+        iframeElement.contentWindow.postMessage(
+          {
+            type: "CART_CLEARED",
+            url: session.url,
+          },
+          "*"
+        );
+      }
+    };
+
+    window.addEventListener("cart:cleared", handleCartCleared);
+
+    return () => {
+      window.removeEventListener("cart:cleared", handleCartCleared);
+    };
+  }, [session.url]);
+
+  // Simple handler to return to store that will cause a refresh
+  const handleReturnToStore = useCallback(() => {
+    // Clear localStorage cart data
+    localStorage.removeItem("cart");
+
+    // Dispatch cart cleared event with payment data if available
+    window.dispatchEvent(
+      new CustomEvent("cart:cleared", {
+        detail: { payment: paymentResult },
+      })
+    );
+
+    // Go back to the homepage
+    window.location.href = "/";
+  }, [paymentResult]);
+
+  // This provider just passes the context, checkout-page.tsx will handle showing success UI
   return (
     <CheckoutFormContext.Provider value={context}>
       {children}
@@ -559,8 +697,88 @@ export function useCheckoutForm() {
 }
 
 export function CheckoutForm() {
+  const {
+    form,
+    submit,
+    validateBothForms,
+    isReady,
+    isSubmitting,
+    events,
+    paymentSuccess,
+    paymentError,
+    paymentResult: contextPaymentResult,
+  } = useCheckoutForm();
   const cardInputId = useId();
-  const { form, events } = useCheckoutForm();
+
+  // State to store payment result data
+  const [localPaymentResult, setLocalPaymentResult] = useState<{
+    id: string;
+    amount: number;
+    currency: string;
+    status: string;
+    created_at: string;
+    methodId: string;
+    last4: string;
+  } | null>(null);
+
+  // Add handler to store payment result data when PAYMENT_COMPLETE is received
+  useEffect(() => {
+    const handlePaymentResult = (event: MessageEvent) => {
+      console.log("Received message in checkout form:", event.data?.type);
+
+      // Handle both PAYMENT_COMPLETE and EvtSuccess events
+      if (
+        (event.data?.type === "PAYMENT_COMPLETE" ||
+          event.data?.type === "EvtSuccess") &&
+        event.data?.data?.payment
+      ) {
+        console.log(
+          "Processing payment message with data:",
+          event.data.data.payment
+        );
+
+        // Set payment result
+        setLocalPaymentResult(event.data.data.payment);
+
+        // Also clear the cart from localStorage
+        localStorage.removeItem("cart");
+
+        // Dispatch cart cleared event with payment data
+        window.dispatchEvent(
+          new CustomEvent("cart:cleared", {
+            detail: { payment: event.data.data.payment },
+          })
+        );
+      }
+    };
+
+    window.addEventListener("message", handlePaymentResult);
+
+    return () => {
+      window.removeEventListener("message", handlePaymentResult);
+    };
+  }, []);
+
+  // Simple handler to return to store that will cause a refresh
+  const handleReturnToStore = useCallback(() => {
+    // Clear localStorage cart data
+    localStorage.removeItem("cart");
+
+    // Dispatch cart cleared event with payment data if available
+    window.dispatchEvent(
+      new CustomEvent("cart:cleared", {
+        detail: { payment: localPaymentResult },
+      })
+    );
+
+    // Go back to the homepage
+    window.location.href = "/";
+  }, [localPaymentResult]);
+
+  // Check if payment was successful - if so, don't render the form
+  if (paymentSuccess || localPaymentResult) {
+    return null; // Don't render anything since checkout-page.tsx will handle showing the success UI
+  }
 
   return (
     <Form {...form}>

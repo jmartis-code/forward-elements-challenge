@@ -21,21 +21,9 @@ export function CheckoutButton() {
 
   const isProcessing = isValidating || isSubmitting;
 
-  // If payment is successful, show success message
+  // If payment is successful, don't show button at all
   if (paymentSuccess) {
-    return (
-      <div className="w-full flex flex-col items-center gap-4">
-        <div className="flex items-center text-green-600 gap-2">
-          <CheckCircle className="w-6 h-6" />
-          <span className="text-lg font-medium">
-            Payment Completed Successfully
-          </span>
-        </div>
-        <Button onClick={() => (window.location.href = "/")}>
-          Return to Store
-        </Button>
-      </div>
-    );
+    return null;
   }
 
   return (
