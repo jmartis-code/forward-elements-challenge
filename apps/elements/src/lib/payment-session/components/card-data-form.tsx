@@ -744,10 +744,12 @@ function CardFormContent({
                       {...field}
                       value={formatCardNumber(field.value)}
                       onChange={(e) => {
-                        field.onChange(formatCardNumber(e.target.value));
+                        const value = e.target.value.replace(/[^\d\s]/g, "");
+                        field.onChange(formatCardNumber(value));
                       }}
                       maxLength={19}
                       className="font-mono h-9"
+                      inputMode="numeric"
                     />
                   </FormControl>
                   <FormMessage />
@@ -775,17 +777,19 @@ function CardFormContent({
                 name="expiryDate"
                 render={({ field, fieldState }) => (
                   <FormItem className="w-1/2">
-                    <FormLabel>Expiry Date</FormLabel>
+                    <FormLabel>Expiration Date</FormLabel>
                     <FormControl>
                       <Input
                         placeholder="MM/YY"
                         {...field}
                         value={field.value}
                         onChange={(e) => {
-                          field.onChange(formatExpiryDate(e.target.value));
+                          const value = e.target.value.replace(/[^\d/]/g, "");
+                          field.onChange(formatExpiryDate(value));
                         }}
                         maxLength={5}
                         className="h-9"
+                        inputMode="numeric"
                       />
                     </FormControl>
                     <FormMessage />
@@ -803,9 +807,15 @@ function CardFormContent({
                       <Input
                         placeholder="123"
                         {...field}
+                        value={field.value}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/\D/g, "");
+                          field.onChange(value);
+                        }}
                         maxLength={4}
                         type="password"
                         className="h-9"
+                        inputMode="numeric"
                       />
                     </FormControl>
                     <FormMessage />
