@@ -1,8 +1,18 @@
-import { Table, TableRow, TableCell, TableHead, TableBody, TableHeader, TableCaption } from "@fwd/ui/components/table";
+import {
+  Table,
+  TableRow,
+  TableCell,
+  TableHead,
+  TableBody,
+  TableHeader,
+  TableCaption,
+} from "@fwd/ui/components/table";
 import type { CartItem } from "@/lib/cart/cart.types";
 
 export function CheckoutSummary({ cart }: { cart: CartItem[] }) {
-  const sum = cart.reduce((acc, item) => acc + item.price * item.quantity, 0).toFixed(2);
+  const sum = cart
+    .reduce((acc, item) => acc + item.price * item.quantity, 0)
+    .toFixed(2);
   const groupById = cart.reduce((acc, item) => {
     if (acc[item.id]) {
       acc[item.id]!.quantity += 1;
@@ -18,7 +28,7 @@ export function CheckoutSummary({ cart }: { cart: CartItem[] }) {
 
   return (
     <div>
-      <h2 className="text-3xl font-bold">Cart</h2>
+      <h2 className="text-2xl font-bold">Cart</h2>
       <Table>
         <TableHeader>
           <TableRow>
@@ -38,11 +48,13 @@ export function CheckoutSummary({ cart }: { cart: CartItem[] }) {
             </TableRow>
           ))}
           <TableRow>
-            <TableCell colSpan={3} className="text-right">Total</TableCell>
+            <TableCell colSpan={3} className="text-right">
+              Total
+            </TableCell>
             <TableCell>${sum}</TableCell>
           </TableRow>
         </TableBody>
       </Table>
     </div>
-  )
+  );
 }

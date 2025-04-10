@@ -31,7 +31,7 @@ export function CheckoutButton() {
       <Button
         onClick={handleSubmit}
         disabled={!isReady || isProcessing}
-        className="w-full py-6 text-lg font-medium"
+        className="py-6 text-md font-medium"
       >
         {isProcessing ? (
           <>
