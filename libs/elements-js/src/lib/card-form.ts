@@ -41,6 +41,7 @@ export interface CardFormConfig {
 
 export class CardForm extends Element<CardFormEvent, CardFormEventListener> {
   #config: CardFormConfig;
+  #lastReceivedHeight = 300; // Track the last height to prevent unnecessary updates
 
   constructor(config: CardFormConfig, logger?: Logger) {
     super(config.sessionUrl, logger);
@@ -59,6 +60,28 @@ export class CardForm extends Element<CardFormEvent, CardFormEventListener> {
 
     try {
       const type = (event.data as CardFormEvent).type;
+      const messageType = (event.data as any)?.type;
+
+      // Reset height tracking when validation occurs to ensure we get fresh measurements
+      if (
+        type === EvtValidationResult || 
+        messageType === "VALIDATE_FORM" || 
+        messageType === "submit-form"
+      ) {
+        const oldHeight = this.#lastReceivedHeight;
+        this.#lastReceivedHeight = 300; // Reset to base height
+        
+        this.logger.log(
+          `[Validation] Detected validation event (type=${messageType || type}), resetting height tracking from ${oldHeight}px → 300px`
+        );
+        
+        // If we have a frame, log its current dimensions too
+        if (this.frame) {
+          this.logger.log(
+            `[Validation] Current iframe dimensions before reset: height=${this.frame.style.height}, minHeight=${this.frame.style.minHeight}`
+          );
+        }
+      }
 
       switch (type) {
         case EvtReady: {
@@ -85,6 +108,43 @@ export class CardForm extends Element<CardFormEvent, CardFormEventListener> {
         }
         case EvtHello: {
           this.emit(CardFormHelloEvent.parse(event.data));
+          // Check if this is a resize message
+          if (event.data?.data?.message === "resize" && event.data?.data?.height && this.frame) {
+            const receivedHeight = parseInt(String(event.data.data.height), 10);
+            const height = Math.max(300, receivedHeight);
+            
+            // Log the received height and current iframe dimensions
+            this.logger.log(`[Resize] Received height message: ${receivedHeight}px, using: ${height}px`);
+            this.logger.log(`[Resize] Current iframe dimensions: height=${this.frame.style.height}, minHeight=${this.frame.style.minHeight}`);
+            
+            // When new validation errors appear, we should be more accepting of height changes
+            const isValidationInProgress = this.#lastReceivedHeight === 300;
+            
+            // Check if the height has changed significantly (more than 10px) to avoid tiny adjustments
+            // Also add an absolute max height check to prevent unreasonable growth
+            const heightChangeIsSignificant = Math.abs(height - this.#lastReceivedHeight) > 10;
+            const heightIsReasonable = height < 1200; // Set a reasonable max height
+            
+            // Log decision factors
+            this.logger.log(`[Resize] Decision factors: validationInProgress=${isValidationInProgress}, changeIsSignificant=${heightChangeIsSignificant} (${Math.abs(height - this.#lastReceivedHeight)}px), isReasonable=${heightIsReasonable}`);
+            
+            if ((heightChangeIsSignificant || isValidationInProgress) && heightIsReasonable) {
+              // Log current and new height for debugging
+              this.logger.log(`[Resize] ✓ Applying height change: ${this.#lastReceivedHeight}px → ${height}px (change: ${height - this.#lastReceivedHeight}px)`);
+              
+              this.#lastReceivedHeight = height;
+              
+              // Apply the height with a small buffer to avoid scrollbars
+              const heightWithBuffer = height + 20;
+              this.frame.style.height = `${heightWithBuffer}px`;
+              this.frame.style.minHeight = `${heightWithBuffer}px`;
+              this.logger.log(`[Resize] ✓ Resized iframe to ${heightWithBuffer}px (content: ${height}px, buffer: 20px)`);
+            } else if (!heightIsReasonable) {
+              this.logger.warn(`[Resize] ✗ Rejecting unreasonable height: ${height}px`);
+            } else {
+              this.logger.log(`[Resize] ✗ Ignoring small height change: ${height}px vs last ${this.#lastReceivedHeight}px (change: ${height - this.#lastReceivedHeight}px)`);
+            }
+          }
           break;
         }
         case EvtValidationResult:
@@ -346,10 +406,10 @@ export class CardForm extends Element<CardFormEvent, CardFormEventListener> {
 
   protected override setInitialHeight() {
     if (this.frame) {
-      // Set a larger initial height for the card form (800px)
-      this.frame.style.minHeight = '800px';
-      this.frame.style.height = '800px';
-      this.logger.log('Set initial card form height to 800px');
+      // Set initial height to 300px
+      this.frame.style.minHeight = '300px';
+      this.frame.style.height = '300px';
+      this.logger.log('Set initial card form height to 300px');
     }
   }
 }

@@ -83,9 +83,8 @@ export default function PaymentSessionPage({
   return (
     <>
       <IframeStyles />
-      <div className="w-full" style={{ minHeight: "350px", height: "350px" }}>
-        <CardDataForm sessionUrl={url} />
-      </div>
+
+      <CardDataForm sessionUrl={url} />
     </>
   );
 }

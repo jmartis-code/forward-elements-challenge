@@ -65,8 +65,8 @@ export abstract class Element<E, L extends Listener<E>> {
 
     this.frame.src = this.url;
     this.frame.style.width = '100%';
-    this.frame.style.height = '800px';
-    this.frame.style.minHeight = '800px';
+    this.frame.style.height = '300px';
+    this.frame.style.minHeight = '300px';
     this.frame.style.border = 'none';
     this.frame.style.overflow = 'hidden';
     this.frame.allow = 'payment';

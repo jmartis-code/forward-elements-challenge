@@ -2,7 +2,14 @@
 
 import * as React from "react";
 
-import { EvtError, EvtReady, EvtSubmit, EvtSuccess } from "@fwd/elements-types";
+import {
+  EvtError,
+  EvtReady,
+  EvtSubmit,
+  EvtSuccess,
+  EvtHello,
+  EvtValidationResult,
+} from "@fwd/elements-types";
 import { CardForm as CardFormCore } from "@fwd/elements-js";
 import { createContext } from "react";
 import { cn } from "@fwd/ui/lib/utils";
@@ -88,7 +95,41 @@ export const useCardForm = () => {
 export const CardInput = ({ className }: { className?: string }) => {
   const ref = React.useRef<HTMLDivElement>(null);
   const [isMounted, setIsMounted] = React.useState(false);
+  const [containerHeight, setContainerHeight] = React.useState(300);
+  const resizeTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const { form, isReady } = useCardForm();
+
+  // Simplified approach - just use a fixed minimum height and let ResizeObserver handle sizing
+  React.useEffect(() => {
+    if (!isReady || !isMounted) return;
+
+    const handleMessage = (event: MessageEvent) => {
+      // Check if this is a resize message from our iframe
+      if (
+        event.data?.type === EvtHello &&
+        event.data?.data?.message === "resize" &&
+        event.data?.data?.height
+      ) {
+        const receivedHeight = parseInt(String(event.data.data.height), 10);
+        const newHeight = Math.max(300, receivedHeight);
+        console.log(
+          `[CardInput] Received resize message with height=${receivedHeight}px, using=${newHeight}px`
+        );
+        setContainerHeight(newHeight);
+      }
+    };
+
+    console.log(
+      `[CardInput] Adding message listener for iframe events (isReady=${isReady}, isMounted=${isMounted})`
+    );
+    window.addEventListener("message", handleMessage);
+    return () => {
+      window.removeEventListener("message", handleMessage);
+      if (resizeTimeoutRef.current) {
+        clearTimeout(resizeTimeoutRef.current);
+      }
+    };
+  }, [isReady, isMounted]);
 
   // Ensure the form is mounted whenever the ref or form changes
   React.useEffect(() => {
@@ -136,8 +177,9 @@ export const CardInput = ({ className }: { className?: string }) => {
       ref={ref}
       className={cn("elements-card-input", className)}
       style={{
-        minHeight: "500px",
-        height: "500px",
+        minHeight: `${containerHeight}px`,
+        height: `${containerHeight}px`,
+        transition: "height 0.2s ease-in-out",
       }}
     />
   );

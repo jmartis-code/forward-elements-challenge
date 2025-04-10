@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, ReactNode } from "react";
+import { useState, useEffect, useCallback, ReactNode, useRef } from "react";
 import { CardFormProvider, useCardForm } from "@fwd/elements-react";
 import {
   EvtReady,
@@ -26,6 +26,14 @@ import {
   FormLabel,
   FormMessage,
 } from "@fwd/ui/components/form";
+
+// Add type definitions for the window properties
+declare global {
+  interface Window {
+    _lastReportedHeight?: number;
+    _resizeTimeout?: NodeJS.Timeout;
+  }
+}
 
 // Validation schema for the card form
 const CardFormSchema = z.object({
@@ -149,6 +157,9 @@ function CardFormContent({
     last4: string;
   } | null>(null);
 
+  const lastHeightRef = useRef<number>(0);
+  const resizeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   // Add console logs for debugging
   useEffect(() => {
     console.log("CardFormContent mounted");
@@ -160,6 +171,86 @@ function CardFormContent({
     };
   }, [isReady, cardForm]);
 
+  // Set up a ResizeObserver to directly monitor content height changes
+  useEffect(() => {
+    // Previous height reference for logging
+    let previousContentHeight = 0;
+
+    // Create a ResizeObserver instance
+    const resizeObserver = new ResizeObserver((entries) => {
+      // We only have one element being observed
+      const entry = entries[0];
+      if (!entry) return;
+
+      // Get the content height directly from the observed element
+      const contentRect = entry.contentRect;
+
+      // Log height changes for debugging
+      if (previousContentHeight !== contentRect.height) {
+        console.log(
+          `[ResizeObserver] Content height changed: ${previousContentHeight}px → ${
+            contentRect.height
+          }px (change: ${contentRect.height - previousContentHeight}px)`
+        );
+        previousContentHeight = contentRect.height;
+      }
+
+      // Calculate the total height with some padding
+      const newHeight = Math.max(contentRect.height + 40, 300);
+
+      // Only send updates when height has significantly changed
+      if (Math.abs(newHeight - lastHeightRef.current) > 10) {
+        console.log(
+          `[ResizeObserver] Sending height update - new: ${newHeight}px`
+        );
+        lastHeightRef.current = newHeight;
+
+        // Send the resize message immediately
+        window.parent.postMessage(
+          {
+            type: EvtHello,
+            url: sessionUrl,
+            data: {
+              message: "resize",
+              height: newHeight,
+              isMobile: window.innerWidth < 640,
+            },
+          },
+          "*"
+        );
+      }
+    });
+
+    // Find the element to observe - the form content container
+    const contentElement = document.getElementById("card-form-content");
+    if (contentElement) {
+      console.log(
+        "[ResizeObserver] Setting up ResizeObserver on card-form-content"
+      );
+      previousContentHeight = contentElement.getBoundingClientRect().height;
+      resizeObserver.observe(contentElement);
+    } else {
+      console.warn(
+        "[ResizeObserver] Could not find card-form-content element to observe"
+      );
+    }
+
+    // Cleanup function
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [sessionUrl]);
+
+  // Function to send size information to parent window (remove implementation)
+  const sendSizeToParent = useCallback(() => {
+    // No-op - ResizeObserver handles height changes
+  }, []);
+
+  // Create a debounced version of sendSizeToParent (remove implementation)
+  const debouncedSendSizeToParent = useCallback(() => {
+    // No-op - ResizeObserver handles height changes
+  }, [sendSizeToParent]);
+
   // Initialize the form with validation
   const form = useForm<CardFormSchema>({
     resolver: zodResolver(CardFormSchema),
@@ -170,29 +261,6 @@ function CardFormContent({
       cvv: "",
     },
   });
-
-  // Function to send size information to parent window
-  const sendSizeToParent = useCallback(() => {
-    const height = document.body.scrollHeight;
-    const isMobile = window.innerWidth < 640;
-
-    // Use a base height of 370px
-    const baseHeight = Math.max(height, 370);
-    const adjustedHeight = baseHeight; // No multiplier, just use actual height
-
-    window.parent.postMessage(
-      {
-        type: EvtHello,
-        url: sessionUrl,
-        data: {
-          message: "resize",
-          height: adjustedHeight,
-          isMobile: isMobile,
-        },
-      },
-      "*"
-    );
-  }, [sessionUrl]);
 
   // Subscribe to card form events
   useEffect(() => {
@@ -240,7 +308,7 @@ function CardFormContent({
       delete (window as any).validateCardForm;
       delete (window as any).validateAndSubmitForm;
     };
-  }, [form, sendSizeToParent]);
+  }, [form, debouncedSendSizeToParent]);
 
   // Function to validate form and report errors to parent
   const validateAndReportForm = useCallback(() => {
@@ -426,13 +494,12 @@ function CardFormContent({
 
     window.addEventListener("message", handleStyleMessages);
 
-    // Send size information to parent
-    sendSizeToParent();
+    // No need to explicitly send size - ResizeObserver handles it
 
     return () => {
       window.removeEventListener("message", handleStyleMessages);
     };
-  }, [sessionUrl, sendSizeToParent]);
+  }, [sessionUrl]);
 
   // Function to validate and submit if valid
   const validateAndSubmitForm = () => {
@@ -632,136 +699,141 @@ function CardFormContent({
   return (
     <div
       id="card-element-container"
-      className="py-4 bg-white"
-      style={{ minHeight: "380px" }}
+      className="py-4 bg-white px-1"
+      style={{ minHeight: "300px" }}
     >
-      <style jsx global>{`
-        /* Match the checkout form error styling */
-        .form-message {
-          color: hsl(var(--destructive)) !important;
-          font-size: 0.75rem;
-          margin-top: 0.25rem;
-          font-weight: 500;
-          opacity: 1 !important;
-          visibility: visible !important;
-        }
-      `}</style>
+      <div id="card-form-content">
+        <style jsx global>{`
+          /* Match the checkout form error styling */
+          .form-message {
+            color: hsl(var(--destructive)) !important;
+            font-size: 0.75rem;
+            margin-top: 0.25rem;
+            font-weight: 500;
+            opacity: 1 !important;
+            visibility: visible !important;
+          }
+        `}</style>
 
-      {submitError && (
-        <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-md mb-4 text-xs">
-          <p>{submitError}</p>
-        </div>
-      )}
-
-      {showSuccessMessage && (
-        <div className="bg-green-50 border border-green-200 text-green-700 p-3 rounded-md mb-4 text-xs">
-          <p>Payment details submitted successfully!</p>
-        </div>
-      )}
-
-      <h2 className="text-lg font-medium mb-4">Payment Information</h2>
-
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-          <FormField
-            control={form.control}
-            name="cardNumber"
-            render={({ field, fieldState }) => (
-              <FormItem>
-                <FormLabel>Card Number</FormLabel>
-                <FormControl>
-                  <Input
-                    placeholder="4242 4242 4242 4242"
-                    {...field}
-                    value={formatCardNumber(field.value)}
-                    onChange={(e) => {
-                      field.onChange(formatCardNumber(e.target.value));
-                    }}
-                    maxLength={19}
-                    className="font-mono h-9"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="cardholderName"
-            render={({ field, fieldState }) => (
-              <FormItem>
-                <FormLabel>Cardholder Name</FormLabel>
-                <FormControl>
-                  <Input placeholder="John Doe" {...field} className="h-9" />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <div className="w-full flex flex-col-2 gap-4">
-            <FormField
-              control={form.control}
-              name="expiryDate"
-              render={({ field, fieldState }) => (
-                <FormItem className="w-1/2">
-                  <FormLabel>Expiry Date</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="MM/YY"
-                      {...field}
-                      value={field.value}
-                      onChange={(e) => {
-                        field.onChange(formatExpiryDate(e.target.value));
-                      }}
-                      maxLength={5}
-                      className="h-9"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="cvv"
-              render={({ field, fieldState }) => (
-                <FormItem className="w-1/2">
-                  <FormLabel>CVV</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="123"
-                      {...field}
-                      maxLength={4}
-                      type="password"
-                      className="h-9"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+        {submitError && (
+          <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-md mb-4 text-xs">
+            <p>{submitError}</p>
           </div>
+        )}
 
-          {/* Debug information */}
-          {events.length > 0 && (
-            <div className="font-mono text-xs mt-4 overflow-hidden">
-              <details>
-                <summary className="cursor-pointer">Events</summary>
-                {events.map((event, idx) => (
-                  <div key={`${event.type}-${idx}`} className="overflow-x-auto">
-                    <pre className="text-xs">
-                      {JSON.stringify(event, null, 2)}
-                    </pre>
-                  </div>
-                ))}
-              </details>
+        {showSuccessMessage && (
+          <div className="bg-green-50 border border-green-200 text-green-700 p-3 rounded-md mb-4 text-xs">
+            <p>Payment details submitted successfully!</p>
+          </div>
+        )}
+
+        <h2 className="text-lg font-medium mb-4">Payment Information</h2>
+
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="cardNumber"
+              render={({ field, fieldState }) => (
+                <FormItem>
+                  <FormLabel>Card Number</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="4242 4242 4242 4242"
+                      {...field}
+                      value={formatCardNumber(field.value)}
+                      onChange={(e) => {
+                        field.onChange(formatCardNumber(e.target.value));
+                      }}
+                      maxLength={19}
+                      className="font-mono h-9"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="cardholderName"
+              render={({ field, fieldState }) => (
+                <FormItem>
+                  <FormLabel>Cardholder Name</FormLabel>
+                  <FormControl>
+                    <Input placeholder="John Doe" {...field} className="h-9" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="w-full flex flex-col-2 gap-4">
+              <FormField
+                control={form.control}
+                name="expiryDate"
+                render={({ field, fieldState }) => (
+                  <FormItem className="w-1/2">
+                    <FormLabel>Expiry Date</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="MM/YY"
+                        {...field}
+                        value={field.value}
+                        onChange={(e) => {
+                          field.onChange(formatExpiryDate(e.target.value));
+                        }}
+                        maxLength={5}
+                        className="h-9"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="cvv"
+                render={({ field, fieldState }) => (
+                  <FormItem className="w-1/2">
+                    <FormLabel>CVV</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="123"
+                        {...field}
+                        maxLength={4}
+                        type="password"
+                        className="h-9"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
-          )}
-        </form>
-      </Form>
+
+            {/* Debug information */}
+            {events.length > 0 && (
+              <div className="font-mono text-xs mt-4 overflow-hidden">
+                <details>
+                  <summary className="cursor-pointer">Events</summary>
+                  {events.map((event, idx) => (
+                    <div
+                      key={`${event.type}-${idx}`}
+                      className="overflow-x-auto"
+                    >
+                      <pre className="text-xs">
+                        {JSON.stringify(event, null, 2)}
+                      </pre>
+                    </div>
+                  ))}
+                </details>
+              </div>
+            )}
+          </form>
+        </Form>
+      </div>
     </div>
   );
 }
