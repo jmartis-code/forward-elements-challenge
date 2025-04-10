@@ -2,7 +2,7 @@
 
 import { CardFormProvider } from "@fwd/elements-react";
 import { CheckoutForm } from "./checkout-form";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 
 import { CheckoutFormProvider } from "./checkout-form";
@@ -31,6 +31,11 @@ export function CheckoutPage({ cart }: { cart: CartItem[] }) {
     methodId?: string;
     last4?: string;
   } | null>(null);
+
+  // Create a stable reference ID that won't change on re-renders
+  const referenceIdRef = useRef<string>(`order-${Date.now()}`);
+  // Flag to track if we've already created a session
+  const sessionCreatedRef = useRef<boolean>(false);
 
   // Redirect if cart is empty
   useEffect(() => {
@@ -99,8 +104,17 @@ export function CheckoutPage({ cart }: { cart: CartItem[] }) {
 
   useEffect(() => {
     async function createSession() {
+      // Prevent duplicate session creation
+      if (sessionCreatedRef.current || session !== null) {
+        console.log("Session already created, skipping");
+        return;
+      }
+
       try {
         setLoading(true);
+        // Mark that we're creating a session
+        sessionCreatedRef.current = true;
+
         // Calculate the total amount from cart items in dollars
         const amountInDollars = cart.reduce(
           (sum, item) => sum + item.price * item.quantity,
@@ -113,12 +127,12 @@ export function CheckoutPage({ cart }: { cart: CartItem[] }) {
         console.log("Cart total in dollars:", amountInDollars);
         console.log("Cart total in cents:", amountInCents);
 
-        // Prepare request data
+        // Prepare request data - using stable reference ID
         const requestBody = {
           amount: amountInCents,
           currency: "usd" as const,
           methods: ["card"] as ["card"],
-          referenceId: `order-${Date.now()}`,
+          referenceId: referenceIdRef.current,
           metadata: {
             cartItems: String(cart.length),
           },
@@ -154,6 +168,9 @@ export function CheckoutPage({ cart }: { cart: CartItem[] }) {
             ? err.message
             : "Failed to create payment session"
         );
+        // Reset the flag so we can retry
+        sessionCreatedRef.current = false;
+
         // Fallback to a test session in development mode
         if (process.env.NODE_ENV === "development") {
           console.log("Using fallback test session");
