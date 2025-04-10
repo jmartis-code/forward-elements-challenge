@@ -108,7 +108,8 @@ export const CardInput = ({ className }: { className?: string }) => {
   return (
     <div
       ref={ref}
-      className={cn("elements-card-input border border-dashed", className)}
+      className={cn("elements-card-input", className)}
+      style={{ minHeight: "370px", height: "370px" }}
     />
   );
 };

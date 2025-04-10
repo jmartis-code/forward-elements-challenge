@@ -11,7 +11,7 @@ const cspHeader = `
     object-src 'none';
     base-uri 'self';
     form-action 'self';
-    frame-ancestors http://localhost:3002;
+    frame-ancestors 'self' http://localhost:* http://127.0.0.1:*;
     upgrade-insecure-requests;
 `;
 

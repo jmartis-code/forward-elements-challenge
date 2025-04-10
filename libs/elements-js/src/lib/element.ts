@@ -51,7 +51,8 @@ export abstract class Element<E, L extends Listener<E>> {
 
     this.frame.src = this.url;
     this.frame.style.width = '100%';
-    this.frame.style.height = '100%';
+    this.frame.style.height = '370px';
+    this.frame.style.minHeight = '370px';
     this.frame.style.border = 'none';
     target.appendChild(frame);
     window.addEventListener('message', this.handleMessage.bind(this));

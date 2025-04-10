@@ -274,14 +274,14 @@ export function CheckoutForm() {
 
       <CardInput key={cardInputId} className="-mx-4" />
 
-      <div className="font-mono text-xs">
+      {/* <div className="font-mono text-xs">
         <span>Events from card form:</span>
         {events.map((event, idx) => (
           <div key={event.type + idx}>
             <pre>{JSON.stringify(event, null, 2)}</pre>
           </div>
         ))}
-      </div>
+      </div> */}
     </Form>
   );
 }
