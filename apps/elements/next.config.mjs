@@ -1,11 +1,13 @@
 //@ts-check
 
-const { composePlugins, withNx } = require("@nx/next");
+import { composePlugins, withNx } from '@nx/next';
 
 const cspHeader = `
     default-src 'self';
     script-src 'self' 'unsafe-eval' 'unsafe-inline';
     style-src 'self' 'unsafe-inline';
+    frame-src 'self' http://localhost:* http://127.0.0.1:*;
+    connect-src 'self' http://localhost:* http://127.0.0.1:*;
     img-src 'self' blob: data:;
     font-src 'self';
     object-src 'none';
@@ -14,6 +16,16 @@ const cspHeader = `
     frame-ancestors 'self' http://localhost:* http://127.0.0.1:*;
     upgrade-insecure-requests;
 `;
+
+// Get allowed origins from environment or default to localhost for development
+const getAllowedOrigins = () => {
+  const origins = process.env.ALLOWED_ORIGINS?.split(',') || [];
+  // Always include localhost for development
+  if (process.env.NODE_ENV === 'development') {
+    origins.push('http://localhost:3000', 'http://127.0.0.1:3000');
+  }
+  return origins;
+};
 
 /**
  * @type {import('@nx/next/plugins/with-nx').WithNxOptions}
@@ -28,23 +40,32 @@ const nextConfig = {
   transpilePackages: ["@fwd/ui"],
   webpack: (config) => {
     config.resolve.extensionAlias = {
-      ".js": [".ts", ".tsx", ".js", ".jsx"],
+      '.js': ['.ts', '.tsx', '.js', '.jsx'],
     };
     return config;
   },
 
+  experimental: {
+    instrumentationHook: true,
+  },
+
   async headers() {
+    const allowedOrigins = getAllowedOrigins();
     return [
       {
-        source: "/(.*)",
+        source: '/(.*)',
         headers: [
           {
-            key: "Content-Security-Policy",
-            value: cspHeader.replace(/\n/g, ""),
+            key: 'Content-Security-Policy',
+            value: cspHeader.replace(/\n/g, ''),
           },
           {
             key: 'Access-Control-Allow-Origin',
-            value: '*',
+            value: process.env.NODE_ENV === 'development' ? '*' : allowedOrigins[0] || '',
+          },
+          {
+            key: 'Vary',
+            value: 'Origin',
           },
           {
             key: 'Access-Control-Allow-Methods',
@@ -56,11 +77,7 @@ const nextConfig = {
           },
         ],
       },
-    ];
-  },
-
-  experimental: {
-    instrumentationHook: true,
+    ]
   },
 };
 
@@ -69,4 +86,4 @@ const plugins = [
   withNx,
 ];
 
-module.exports = composePlugins(...plugins)(nextConfig);
+export default composePlugins(...plugins)(nextConfig); 

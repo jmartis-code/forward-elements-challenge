@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
 
     const apiKey = authHeader.split(" ")[1];
     
-    if (apiKey !== "test123") {
+    if (!process.env.ELEMENTS_API_KEY || apiKey !== process.env.ELEMENTS_API_KEY) {
       return addCorsHeaders(
         NextResponse.json(
           { error: "Unauthorized", message: "Invalid API key" },
