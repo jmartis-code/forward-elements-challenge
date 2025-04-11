@@ -10,8 +10,8 @@ import { CheckoutSummary } from "./checkout-summary";
 import type { CartItem } from "@/lib/cart/cart.types";
 import { CheckoutButton } from "./checkout-button";
 import type { CreatePaymentSessionResponse } from "@fwd/elements-types";
-import { client } from "@/lib/query-client";
 import { clearCart } from "@/lib/cart/cart.actions";
+import { client } from "@/lib/query-client";
 
 export function CheckoutPage({ cart }: { cart: CartItem[] }) {
   const router = useRouter();
@@ -28,8 +28,9 @@ export function CheckoutPage({ cart }: { cart: CartItem[] }) {
     currency: string;
     status: string;
     created_at: string;
+    method_id?: string;
     methodId?: string;
-    last4?: string;
+    [key: string]: any; // Allow for other properties
   } | null>(null);
 
   // Create a stable reference ID that won't change on re-renders
@@ -146,9 +147,6 @@ export function CheckoutPage({ cart }: { cart: CartItem[] }) {
         // Use the ts-rest client instead of fetch directly
         const response = await client.createPaymentSession({
           body: requestBody,
-          headers: {
-            authorization: "Bearer test123",
-          },
         });
 
         console.log("Payment session response:", response);
@@ -281,12 +279,10 @@ export function CheckoutPage({ cart }: { cart: CartItem[] }) {
                         {paymentResult?.status || "succeeded"}
                       </span>
                     </p>
-                    {paymentResult?.last4 && (
-                      <p className="text-sm">
-                        <span className="font-medium">Card:</span> •••• ••••
-                        •••• {paymentResult.last4}
-                      </p>
-                    )}
+                    <p className="text-sm">
+                      <span className="font-medium">Payment Method:</span>{" "}
+                      Credit Card (tokenized)
+                    </p>
                     <p className="text-sm">
                       <span className="font-medium">Date:</span>{" "}
                       {new Date(

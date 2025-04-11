@@ -4,6 +4,8 @@ import { initClient } from '@ts-rest/core';
 
 const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
 
+// Client for client-side operations - NO AUTH HEADER
+// Only use this for non-sensitive operations and public endpoints
 export const tsr = initQueryClient(ElementsContract, {
   baseUrl,
   baseHeaders: {
@@ -13,7 +15,8 @@ export const tsr = initQueryClient(ElementsContract, {
   jsonQuery: true,
 });
 
-// Direct client for usage outside React Query
+// Direct client for client-side usage outside React Query
+// Only use this for non-sensitive operations and public endpoints
 export const client = initClient(ElementsContract, {
   baseUrl,
   baseHeaders: {

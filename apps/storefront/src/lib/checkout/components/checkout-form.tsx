@@ -57,6 +57,19 @@ const CheckoutFormSchema = z.object({
 });
 type CheckoutFormSchema = z.infer<typeof CheckoutFormSchema>;
 
+// State to store payment result data
+type PaymentResultType = {
+  id: string;
+  amount: number;
+  currency: string;
+  status: string;
+  created_at: string;
+  method_id?: string;
+  methodId?: string;
+  last4?: string;
+  [key: string]: any; // Allow for other properties
+};
+
 type CheckoutFormContextType = {
   form: UseFormReturn<CheckoutFormSchema>;
   submit: () => Promise<void>;
@@ -67,15 +80,7 @@ type CheckoutFormContextType = {
   events: CardFormEvent[];
   paymentSuccess: boolean;
   paymentError: string | null;
-  paymentResult: {
-    id: string;
-    amount: number;
-    currency: string;
-    status: string;
-    created_at: string;
-    methodId: string;
-    last4: string;
-  } | null;
+  paymentResult: PaymentResultType | null;
 };
 
 export const CheckoutFormContext =
@@ -97,15 +102,9 @@ export const CheckoutFormProvider = ({
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
   // State to store payment result data
-  const [paymentResult, setPaymentResult] = useState<{
-    id: string;
-    amount: number;
-    currency: string;
-    status: string;
-    created_at: string;
-    methodId: string;
-    last4: string;
-  } | null>(null);
+  const [paymentResult, setPaymentResult] = useState<PaymentResultType | null>(
+    null
+  );
 
   // Initialize form before we try to use it in processPayment
   const form = useForm<CheckoutFormSchema>({
@@ -209,13 +208,19 @@ export const CheckoutFormProvider = ({
           },
           reference_id: session.reference_id,
         },
-        headers: {
-          authorization: "Bearer test123",
-        },
       });
+
+      console.log("Payment API response:", JSON.stringify(response, null, 2));
 
       if (response.status === 201) {
         console.log("Payment processed successfully:", response.body);
+
+        // Set payment result directly from the API response
+        setPaymentResult({
+          ...response.body,
+          // Make sure methodId is set properly for compatibility
+          methodId: response.body.method_id,
+        });
 
         // Clear cart from localStorage
         localStorage.removeItem("cart");
@@ -223,23 +228,40 @@ export const CheckoutFormProvider = ({
         // Dispatch cart cleared event
         window.dispatchEvent(new CustomEvent("cart:cleared"));
 
+        // Create a payment complete event to dispatch
+        const paymentCompleteEvent = {
+          type: "PAYMENT_COMPLETE",
+          data: {
+            payment: response.body,
+          },
+        };
+
+        // Dispatch the event to both the parent window and this window
+        window.parent.postMessage(paymentCompleteEvent, "*");
+        window.dispatchEvent(
+          new MessageEvent("message", {
+            data: paymentCompleteEvent,
+          })
+        );
+
         setPaymentSuccess(true);
         setPaymentError(null);
         toast.success("Payment Successful", {
-          description: `Payment of $${(session.amount / 100).toFixed(
+          description: `Payment of $${(response.body.amount / 100).toFixed(
             2
           )} has been processed.`,
         });
-        // Redirect or show success page
       } else {
         throw new Error(`Payment processing failed: ${response.status}`);
       }
     } catch (error) {
-      console.error("Error processing payment:", error);
+      console.error("Payment processing error:", error);
+      setIsProcessingPayment(false);
       setPaymentSuccess(false);
       setPaymentError(
         error instanceof Error ? error.message : "Payment processing failed"
       );
+
       toast.error("Payment Failed", {
         description:
           error instanceof Error ? error.message : "Payment processing failed",
@@ -639,7 +661,7 @@ export const CheckoutFormProvider = ({
         // Add a 2-second delay before processing payment result
         await new Promise((resolve) => setTimeout(resolve, 2000));
 
-        // Set payment result
+        // Set payment result directly from the received data
         setPaymentResult(event.data.data.payment);
 
         // Also clear the cart from localStorage
@@ -734,15 +756,8 @@ export function CheckoutForm() {
   const cardInputId = useId();
 
   // State to store payment result data
-  const [localPaymentResult, setLocalPaymentResult] = useState<{
-    id: string;
-    amount: number;
-    currency: string;
-    status: string;
-    created_at: string;
-    methodId: string;
-    last4: string;
-  } | null>(null);
+  const [localPaymentResult, setLocalPaymentResult] =
+    useState<PaymentResultType | null>(null);
 
   // Add handler to store payment result data when PAYMENT_COMPLETE is received
   useEffect(() => {
@@ -763,7 +778,7 @@ export function CheckoutForm() {
         // Add a 2-second delay before processing payment result
         await new Promise((resolve) => setTimeout(resolve, 2000));
 
-        // Set payment result
+        // Set payment result directly from the received data
         setLocalPaymentResult(event.data.data.payment);
 
         // Also clear the cart from localStorage
