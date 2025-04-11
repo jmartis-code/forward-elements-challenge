@@ -42,6 +42,60 @@ import {
 
 import { Input } from "@fwd/ui/components/input";
 
+// US States array for the state select dropdown
+const states = [
+  { value: "AL", label: "Alabama" },
+  { value: "AK", label: "Alaska" },
+  { value: "AZ", label: "Arizona" },
+  { value: "AR", label: "Arkansas" },
+  { value: "CA", label: "California" },
+  { value: "CO", label: "Colorado" },
+  { value: "CT", label: "Connecticut" },
+  { value: "DE", label: "Delaware" },
+  { value: "FL", label: "Florida" },
+  { value: "GA", label: "Georgia" },
+  { value: "HI", label: "Hawaii" },
+  { value: "ID", label: "Idaho" },
+  { value: "IL", label: "Illinois" },
+  { value: "IN", label: "Indiana" },
+  { value: "IA", label: "Iowa" },
+  { value: "KS", label: "Kansas" },
+  { value: "KY", label: "Kentucky" },
+  { value: "LA", label: "Louisiana" },
+  { value: "ME", label: "Maine" },
+  { value: "MD", label: "Maryland" },
+  { value: "MA", label: "Massachusetts" },
+  { value: "MI", label: "Michigan" },
+  { value: "MN", label: "Minnesota" },
+  { value: "MS", label: "Mississippi" },
+  { value: "MO", label: "Missouri" },
+  { value: "MT", label: "Montana" },
+  { value: "NE", label: "Nebraska" },
+  { value: "NV", label: "Nevada" },
+  { value: "NH", label: "New Hampshire" },
+  { value: "NJ", label: "New Jersey" },
+  { value: "NM", label: "New Mexico" },
+  { value: "NY", label: "New York" },
+  { value: "NC", label: "North Carolina" },
+  { value: "ND", label: "North Dakota" },
+  { value: "OH", label: "Ohio" },
+  { value: "OK", label: "Oklahoma" },
+  { value: "OR", label: "Oregon" },
+  { value: "PA", label: "Pennsylvania" },
+  { value: "RI", label: "Rhode Island" },
+  { value: "SC", label: "South Carolina" },
+  { value: "SD", label: "South Dakota" },
+  { value: "TN", label: "Tennessee" },
+  { value: "TX", label: "Texas" },
+  { value: "UT", label: "Utah" },
+  { value: "VT", label: "Vermont" },
+  { value: "VA", label: "Virginia" },
+  { value: "WA", label: "Washington" },
+  { value: "WV", label: "West Virginia" },
+  { value: "WI", label: "Wisconsin" },
+  { value: "WY", label: "Wyoming" },
+] as const;
+
 const CheckoutFormSchema = z.object({
   firstName: z.string().min(1),
   lastName: z.string().min(1),
@@ -712,224 +766,174 @@ export function useCheckoutForm() {
 }
 
 export function CheckoutForm() {
-  const {
-    form,
-    submit,
-    validateBothForms,
-    isReady,
-    isSubmitting,
-    isProcessingPayment,
-    events,
-    paymentSuccess,
-    paymentError,
-    paymentResult: contextPaymentResult,
-  } = useCheckoutForm();
-  const cardInputId = useId();
-
-  // State to store payment result data
-  const [localPaymentResult, setLocalPaymentResult] =
-    useState<PaymentResultType | null>(null);
-
-  // Add handler to store payment result data when PAYMENT_COMPLETE is received
-  useEffect(() => {
-    const handlePaymentResult = async (event: MessageEvent) => {
-      console.log("Received message in checkout form:", event.data?.type);
-
-      // Handle both PAYMENT_COMPLETE and EvtSuccess events
-      if (
-        (event.data?.type === "PAYMENT_COMPLETE" ||
-          event.data?.type === "EvtSuccess") &&
-        event.data?.data?.payment
-      ) {
-        console.log(
-          "Processing payment message with data:",
-          event.data.data.payment
-        );
-
-        // Add a 2-second delay before processing payment result
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-
-        // Set payment result directly from the received data
-        setLocalPaymentResult(event.data.data.payment);
-
-        // Also clear the cart from localStorage
-        localStorage.removeItem("cart");
-
-        // Dispatch cart cleared event with payment data
-        window.dispatchEvent(
-          new CustomEvent("cart:cleared", {
-            detail: { payment: event.data.data.payment },
-          })
-        );
-      }
-    };
-
-    window.addEventListener("message", handlePaymentResult);
-
-    return () => {
-      window.removeEventListener("message", handlePaymentResult);
-    };
-  }, []);
-
-  // Simple handler to return to store that will cause a refresh
-  const handleReturnToStore = useCallback(() => {
-    // Clear localStorage cart data
-    localStorage.removeItem("cart");
-
-    // Dispatch cart cleared event with payment data if available
-    window.dispatchEvent(
-      new CustomEvent("cart:cleared", {
-        detail: { payment: localPaymentResult },
-      })
-    );
-
-    // Go back to the homepage
-    window.location.href = "/";
-  }, [localPaymentResult]);
-
-  // Check if payment was successful - if so, don't render the form
-  if (paymentSuccess || localPaymentResult) {
-    return null; // Don't render anything since checkout-page.tsx will handle showing the success UI
-  }
+  const context = useCheckoutForm();
+  const { form, isProcessingPayment } = context;
+  const { register, formState } = form;
+  const { errors } = formState;
 
   return (
     <Form {...form}>
-      <h2 className="text-lg font-bold mb-4">Shipping Information</h2>
-      <div className="w-full flex flex-col-2 gap-4">
-        <FormField
-          control={form.control}
-          name="firstName"
-          render={({ field }) => (
-            <FormItem className="w-1/2">
-              <FormLabel>First Name</FormLabel>
-              <FormControl>
-                <Input {...field} placeholder="John" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="lastName"
-          render={({ field }) => (
-            <FormItem className="w-1/2">
-              <FormLabel>Last Name</FormLabel>
-              <FormControl>
-                <Input {...field} placeholder="Doe" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-      </div>
+      <form className={isProcessingPayment ? "opacity-50" : ""}>
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="firstName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>First Name</FormLabel>
+                  <FormControl>
+                    <Input disabled={isProcessingPayment} {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="lastName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Last Name</FormLabel>
+                  <FormControl>
+                    <Input disabled={isProcessingPayment} {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
 
-      <div className="w-full flex flex-col-2 gap-4">
-        <FormField
-          control={form.control}
-          name="email"
-          render={({ field }) => (
-            <FormItem className="w-1/2">
-              <FormLabel>Email</FormLabel>
-              <FormControl>
-                <Input {...field} placeholder="john.doe@example.com" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="phone"
-          render={({ field }) => (
-            <FormItem className="w-1/2">
-              <FormLabel>Phone</FormLabel>
-              <FormControl>
-                <Input {...field} placeholder="+1234567890" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-      </div>
+          <FormField
+            control={form.control}
+            name="email"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Email</FormLabel>
+                <FormControl>
+                  <Input
+                    disabled={isProcessingPayment}
+                    type="email"
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-      <FormField
-        control={form.control}
-        name="address.line1"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>Address</FormLabel>
-            <FormControl>
-              <Input {...field} placeholder="123 Main St" />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
+          <FormField
+            control={form.control}
+            name="phone"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Phone</FormLabel>
+                <FormControl>
+                  <Input disabled={isProcessingPayment} type="tel" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-      <FormField
-        control={form.control}
-        name="address.line2"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel></FormLabel>
-            <FormControl>
-              <Input {...field} placeholder="Apartment, suite, etc." />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
+          <div className="space-y-4 pt-6">
+            <h2 className="text-lg font-bold mb-4">Shipping Address</h2>
 
-      <div className="w-full flex flex-col-3 gap-4">
-        <FormField
-          control={form.control}
-          name="address.city"
-          render={({ field }) => (
-            <FormItem className="w-1/3">
-              <FormLabel>City</FormLabel>
-              <FormControl>
-                <Input {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="address.state"
-          render={({ field }) => (
-            <FormItem className="w-1/3">
-              <FormLabel>State</FormLabel>
-              <Select value={field.value} onValueChange={field.onChange}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a state" />
-                </SelectTrigger>
-                <SelectContent className="bg-background">
-                  <SelectItem value="TX">Texas</SelectItem>
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+            <FormField
+              control={form.control}
+              name="address.line1"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Address Line 1</FormLabel>
+                  <FormControl>
+                    <Input disabled={isProcessingPayment} {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-        <FormField
-          control={form.control}
-          name="address.postalCode"
-          render={({ field }) => (
-            <FormItem className="w-1/3">
-              <FormLabel>Postal Code</FormLabel>
-              <FormControl>
-                <Input {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-      </div>
+            <FormField
+              control={form.control}
+              name="address.line2"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Address Line 2</FormLabel>
+                  <FormControl>
+                    <Input disabled={isProcessingPayment} {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-      <CardInput key={cardInputId} className="mb-4" />
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="address.city"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>City</FormLabel>
+                    <FormControl>
+                      <Input disabled={isProcessingPayment} {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="address.state"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>State</FormLabel>
+                    <FormControl>
+                      <Select
+                        disabled={isProcessingPayment}
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a state" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {states.map((state) => (
+                            <SelectItem key={state.value} value={state.value}>
+                              {state.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <FormField
+              control={form.control}
+              name="address.postalCode"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Postal Code</FormLabel>
+                  <FormControl>
+                    <Input disabled={isProcessingPayment} {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <div className="space-y-4">
+            <div className={isProcessingPayment ? "opacity-50" : ""}>
+              <CardInput className="w-full" />
+            </div>
+          </div>
+        </div>
+      </form>
     </Form>
   );
 }

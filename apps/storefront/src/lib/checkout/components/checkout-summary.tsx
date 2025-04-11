@@ -28,7 +28,7 @@ export function CheckoutSummary({ cart }: { cart: CartItem[] }) {
 
   return (
     <div>
-      <h2 className="text-lg font-bold">Cart Summary</h2>
+      <h2 className="text-lg font-bold mb-4">Cart Summary</h2>
       <Table>
         <TableHeader>
           <TableRow>
