@@ -128,37 +128,32 @@ export function CheckoutPage({ cart }: { cart: CartItem[] }) {
         console.log("Cart total in dollars:", amountInDollars);
         console.log("Cart total in cents:", amountInCents);
 
-        // Prepare request data - using stable reference ID
-        const requestBody = {
-          amount: amountInCents,
-          currency: "usd" as const,
-          methods: ["card"] as ["card"],
-          referenceId: referenceIdRef.current,
-          metadata: {
-            cartItems: String(cart.length),
+        // Create session through our server-side API route
+        const response = await fetch("/api/payment-session", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
           },
-        };
-
-        console.log(
-          "Creating payment session with:",
-          JSON.stringify(requestBody, null, 2)
-        );
-
-        // Use the ts-rest client instead of fetch directly
-        const response = await client.createPaymentSession({
-          body: requestBody,
+          body: JSON.stringify({
+            amount: amountInCents,
+            currency: "usd",
+            methods: ["card"],
+            referenceId: referenceIdRef.current,
+            metadata: {
+              cartItems: String(cart.length),
+            },
+          }),
         });
 
-        console.log("Payment session response:", response);
-
-        if (response.status !== 201) {
-          console.error("Error details:", response.body);
+        if (!response.ok) {
+          const errorData = await response.json();
           throw new Error(
-            `Failed to create payment session: ${response.status}`
+            errorData.message || "Failed to create payment session"
           );
         }
 
-        setSession(response.body);
+        const sessionData = await response.json();
+        setSession(sessionData);
       } catch (err) {
         console.error("Error creating payment session:", err);
         setError(
@@ -168,30 +163,6 @@ export function CheckoutPage({ cart }: { cart: CartItem[] }) {
         );
         // Reset the flag so we can retry
         sessionCreatedRef.current = false;
-
-        // Fallback to a test session in development mode
-        if (process.env.NODE_ENV === "development") {
-          console.log("Using fallback test session");
-          // Calculate amount and convert to cents as integer
-          const amountInDollars = cart.reduce(
-            (sum, item) => sum + item.price * item.quantity,
-            0
-          );
-          const amountInCents = Math.round(amountInDollars * 100);
-
-          console.log("Cart total in dollars:", amountInDollars);
-          console.log("Cart total in cents:", amountInCents);
-
-          setSession({
-            id: "test-session",
-            url: `http://localhost:3000/payment-session/test-session?amount=${amountInCents}`,
-            amount: amountInCents,
-            currency: "usd",
-            methods: ["card"],
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          });
-        }
       } finally {
         setLoading(false);
       }

@@ -6,18 +6,14 @@ import {
   CreatePaymentRequest 
 } from '@fwd/elements-types';
 import { initClient } from '@ts-rest/core';
-
-// Constants
-// According to README, the API key is test123
-const API_KEY = 'test123';
-const BASE_URL = process.env.API_URL || 'http://localhost:3000/api';
+import { serverEnv, publicEnv } from '../config/env';
 
 // Initialize the contract client for server-side use
 const client = initClient(ElementsContract, {
-  baseUrl: BASE_URL,
+  baseUrl: publicEnv.API_URL,
   baseHeaders: {
     'Content-Type': 'application/json',
-    'Authorization': `Bearer ${API_KEY}`
+    'Authorization': `Bearer ${serverEnv.ELEMENTS_API_KEY}`
   }
 });
 

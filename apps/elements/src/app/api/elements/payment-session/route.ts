@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { CreatePaymentSessionRequest } from "@fwd/elements-types";
 import { addCorsHeaders } from "../../cors";
 import { sessions, addSession } from "../../payment-session/store";
+import { serverEnv } from "@/lib/config/env";
 
 // Helper to add CORS headers
 export async function OPTIONS() {
@@ -24,7 +25,7 @@ export async function POST(req: NextRequest) {
 
     const apiKey = authHeader.split(" ")[1];
     
-    if (apiKey !== "test123") {
+    if (apiKey !== serverEnv.ELEMENTS_API_KEY) {
       return addCorsHeaders(
         NextResponse.json(
           { error: "Unauthorized", message: "Invalid API key" },

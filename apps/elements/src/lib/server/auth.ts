@@ -1,3 +1,5 @@
+import { serverEnv } from '../config/env';
+
 export const requireAuth = (headers: { authorization: string }) => {
   const key = headers.authorization?.split(" ")[1];
   if (!key) {
@@ -7,7 +9,7 @@ export const requireAuth = (headers: { authorization: string }) => {
     };
   }
 
-  if (key !== "test123") {
+  if (key !== serverEnv.ELEMENTS_API_KEY) {
     return {
       status: 403 as const,
       body: { error: "Forbidden" as const, message: "Invalid API key" },

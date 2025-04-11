@@ -186,9 +186,13 @@ export const CheckoutFormProvider = ({
       // Add a 2-second delay to ensure spinner is visible before starting the API call
       await new Promise((resolve) => setTimeout(resolve, 2000));
 
-      // Create payment through the API
-      const response = await client.createPayment({
-        body: {
+      // Create payment through our server-side API route
+      const response = await fetch("/api/payment", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
           session_id: session.id,
           method_id: methodId,
           amount: session.amount,
@@ -203,72 +207,39 @@ export const CheckoutFormProvider = ({
               city: formData.address.city,
               state: formData.address.state,
               postalCode: formData.address.postalCode,
-              country: "US", // Default to US
+              country: "US", // Default to US for this example
             },
           },
-          reference_id: session.reference_id,
-        },
+        }),
       });
 
-      console.log("Payment API response:", JSON.stringify(response, null, 2));
-
-      if (response.status === 201) {
-        console.log("Payment processed successfully:", response.body);
-
-        // Set payment result directly from the API response
-        setPaymentResult({
-          ...response.body,
-          // Make sure methodId is set properly for compatibility
-          methodId: response.body.method_id,
-        });
-
-        // Clear cart from localStorage
-        localStorage.removeItem("cart");
-
-        // Dispatch cart cleared event
-        window.dispatchEvent(new CustomEvent("cart:cleared"));
-
-        // Create a payment complete event to dispatch
-        const paymentCompleteEvent = {
-          type: "PAYMENT_COMPLETE",
-          data: {
-            payment: response.body,
-          },
-        };
-
-        // Dispatch the event to both the parent window and this window
-        window.parent.postMessage(paymentCompleteEvent, "*");
-        window.dispatchEvent(
-          new MessageEvent("message", {
-            data: paymentCompleteEvent,
-          })
-        );
-
-        setPaymentSuccess(true);
-        setPaymentError(null);
-        toast.success("Payment Successful", {
-          description: `Payment of $${(response.body.amount / 100).toFixed(
-            2
-          )} has been processed.`,
-        });
-      } else {
-        throw new Error(`Payment processing failed: ${response.status}`);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Payment failed");
       }
+
+      const paymentData = await response.json();
+
+      // Store the payment result
+      setPaymentResult(paymentData);
+
+      // Dispatch payment complete event
+      window.postMessage(
+        {
+          type: "PAYMENT_COMPLETE",
+          data: { payment: paymentData },
+        },
+        "*"
+      );
     } catch (error) {
       console.error("Payment processing error:", error);
       setIsProcessingPayment(false);
-      setPaymentSuccess(false);
       setPaymentError(
-        error instanceof Error ? error.message : "Payment processing failed"
+        error instanceof Error ? error.message : "Payment failed"
       );
-
       toast.error("Payment Failed", {
-        description:
-          error instanceof Error ? error.message : "Payment processing failed",
+        description: error instanceof Error ? error.message : "Payment failed",
       });
-    } finally {
-      // Always set processing payment state back to false when done
-      setIsProcessingPayment(false);
     }
   };
 
