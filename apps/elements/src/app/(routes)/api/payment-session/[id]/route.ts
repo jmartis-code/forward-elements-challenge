@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { addCorsHeaders } from "../../cors";
+import { getSession } from "../store";
+import { serverEnv } from "@/lib/config/env";
 
 // Helper to add CORS headers
 export async function OPTIONS() {
@@ -12,24 +14,45 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = params;
+    // Extract the authorization header
+    const authHeader = req.headers.get("authorization");
     
-    // Forward the request to the elements implementation
-    const response = await fetch(`${req.nextUrl.origin}/api/elements/payment-session/${id}`, {
-      method: "GET",
-      headers: req.headers
-    });
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return addCorsHeaders(
+        NextResponse.json(
+          { error: "Unauthorized", message: "Invalid or missing authorization header" },
+          { status: 401 }
+        )
+      );
+    }
 
-    // Add CORS headers to the response
-    return addCorsHeaders(new NextResponse(response.body, {
-      status: response.status,
-      headers: response.headers
-    }));
+    const apiKey = authHeader.split(" ")[1];
+    
+    if (apiKey !== serverEnv.ELEMENTS_API_KEY) {
+      return addCorsHeaders(
+        NextResponse.json(
+          { error: "Unauthorized", message: "Invalid API key" },
+          { status: 401 }
+        )
+      );
+    }
+
+    const session = getSession(params.id);
+    if (!session) {
+      return addCorsHeaders(
+        NextResponse.json(
+          { error: "Not Found", message: "Session not found" },
+          { status: 404 }
+        )
+      );
+    }
+
+    return addCorsHeaders(NextResponse.json(session));
   } catch (error) {
-    console.error("Error in payment session proxy:", error);
+    console.error("Error retrieving session:", error);
     return addCorsHeaders(
       NextResponse.json(
-        { error: "Internal Server Error", message: "Failed to retrieve payment session" },
+        { error: "Internal Server Error", message: "Failed to retrieve session" },
         { status: 500 }
       )
     );

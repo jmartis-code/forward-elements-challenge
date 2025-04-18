@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { addCorsHeaders } from "../../../cors";
 import { sessions } from "../../../payment-session/store";
+import { serverEnv } from "@/lib/config/env";
 
 // Helper to add CORS headers
 export async function OPTIONS() {
@@ -27,7 +28,7 @@ export async function GET(
     }
 
     const apiKey = authHeader.split(" ")[1];
-    const expectedKey = process.env.NEXT_PUBLIC_ELEMENTS_API_KEY;
+    const expectedKey = serverEnv.ELEMENTS_API_KEY;
     
     console.log("Received API key:", apiKey);
     console.log("Expected API key:", expectedKey);

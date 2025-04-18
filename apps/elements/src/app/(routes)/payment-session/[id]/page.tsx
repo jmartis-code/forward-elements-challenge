@@ -7,6 +7,7 @@ import { CardDataForm } from "@/lib/payment-session/components/card-data-form";
 import { IframeStyles } from "@/lib/payment-session/components/iframe-styles";
 import { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
+import { validateSession } from "@/lib/payment-session/actions";
 
 export interface Session {
   id: string;
@@ -33,35 +34,21 @@ export default function PaymentSessionPage() {
   }`;
 
   useEffect(() => {
-    async function validateSession() {
+    async function validate() {
       try {
-        const response = await fetch(
-          `${baseUrl}/api/payment-session/${params.id}`,
-          {
-            headers: {
-              Authorization: `Bearer ${process.env.NEXT_PUBLIC_ELEMENTS_API_KEY}`,
-            },
-          }
-        );
-
-        if (!response.ok) {
-          throw new Error(`Session validation failed: ${response.statusText}`);
-        }
-
-        const data = await response.json();
+        const data = await validateSession(params.id as string);
         setSession(data);
-        setIsLoading(false);
       } catch (err) {
-        console.error("Error validating session:", err);
         setError(
-          err instanceof Error ? err.message : "Failed to validate session"
+          err instanceof Error ? err.message : "An unknown error occurred"
         );
+      } finally {
         setIsLoading(false);
       }
     }
 
-    validateSession();
-  }, [params.id, baseUrl]);
+    validate();
+  }, [params.id]);
 
   if (isLoading) {
     return <div className="p-4">Loading session...</div>;
