@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { addCorsHeaders } from "../../cors";
-import { sessions } from "../store";
 
 // Helper to add CORS headers
 export async function OPTIONS() {
@@ -15,54 +14,19 @@ export async function GET(
   try {
     const { id } = params;
     
-    // Special handling for test-session
-    if (id === 'test-session') {
-      // Return a mock session for testing
-      const mockSession = {
-        id: 'test-session',
-        amount: 1000,
-        currency: 'usd' as const,
-        methods: ['card' as const],
-        reference_id: `test-order-${Date.now()}`,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-      
-      console.log("Serving test session:", mockSession);
-      
-      const baseUrl = process.env.NEXT_PUBLIC_URL || `${req.nextUrl.protocol}//${req.nextUrl.host}`;
-      const responseData = {
-        ...mockSession,
-        url: `${baseUrl}/payment-session/test-session`
-      };
-      
-      return addCorsHeaders(NextResponse.json(responseData));
-    }
-    
-    // Retrieve the session
-    const session = sessions[id];
-    
-    if (!session) {
-      return addCorsHeaders(
-        NextResponse.json(
-          { error: "Not Found", message: "Session not found" },
-          { status: 404 }
-        )
-      );
-    }
-    
-    // Add the URL to the response
-    const baseUrl = process.env.NEXT_PUBLIC_URL || `${req.nextUrl.protocol}//${req.nextUrl.host}`;
-    const responseData = {
-      ...session,
-      url: `${baseUrl}/payment-session/${id}`
-    };
-    
-    return addCorsHeaders(
-      NextResponse.json(responseData, { status: 200 })
-    );
+    // Forward the request to the elements implementation
+    const response = await fetch(`${req.nextUrl.origin}/api/elements/payment-session/${id}`, {
+      method: "GET",
+      headers: req.headers
+    });
+
+    // Add CORS headers to the response
+    return addCorsHeaders(new NextResponse(response.body, {
+      status: response.status,
+      headers: response.headers
+    }));
   } catch (error) {
-    console.error("Failed to get payment session:", error);
+    console.error("Error in payment session proxy:", error);
     return addCorsHeaders(
       NextResponse.json(
         { error: "Internal Server Error", message: "Failed to retrieve payment session" },

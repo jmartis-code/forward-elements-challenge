@@ -12,6 +12,7 @@ import { CheckoutButton } from "./checkout-button";
 import type { CreatePaymentSessionResponse } from "@fwd/elements-types";
 import { clearCart } from "@/lib/cart/cart.actions";
 import { client } from "@/lib/query-client";
+import { createPaymentSession } from "@/lib/server/api-service";
 
 export function CheckoutPage({ cart }: { cart: CartItem[] }) {
   const router = useRouter();
@@ -128,31 +129,17 @@ export function CheckoutPage({ cart }: { cart: CartItem[] }) {
         console.log("Cart total in dollars:", amountInDollars);
         console.log("Cart total in cents:", amountInCents);
 
-        // Create session through our server-side API route
-        const response = await fetch("/api/payment-session", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
+        // Create session using the server-side function
+        const sessionData = await createPaymentSession({
+          amount: amountInCents,
+          currency: "usd",
+          methods: ["card"],
+          referenceId: referenceIdRef.current,
+          metadata: {
+            cartItems: String(cart.length),
           },
-          body: JSON.stringify({
-            amount: amountInCents,
-            currency: "usd",
-            methods: ["card"],
-            referenceId: referenceIdRef.current,
-            metadata: {
-              cartItems: String(cart.length),
-            },
-          }),
         });
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(
-            errorData.message || "Failed to create payment session"
-          );
-        }
-
-        const sessionData = await response.json();
         setSession(sessionData);
       } catch (err) {
         console.error("Error creating payment session:", err);

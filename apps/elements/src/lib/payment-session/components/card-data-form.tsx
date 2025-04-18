@@ -15,6 +15,7 @@ import {
 import { useForm, SubmitHandler } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Session } from "@/app/(routes)/payment-session/[id]/page";
 
 // UI Components
 import { Input } from "@fwd/ui/components/input";
@@ -102,9 +103,10 @@ type CardFormSchema = z.infer<typeof CardFormSchema>;
 
 interface CardDataFormProps {
   sessionUrl: string;
+  session: Session;
 }
 
-export function CardDataForm({ sessionUrl }: CardDataFormProps) {
+export function CardDataForm({ sessionUrl, session }: CardDataFormProps) {
   // Extract session ID from the URL
   const sessionId = sessionUrl.split("/").pop() || "";
 
